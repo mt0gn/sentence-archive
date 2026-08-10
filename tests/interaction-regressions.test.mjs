@@ -104,7 +104,7 @@ test("attribution is rendered above every layout rather than limited by layout m
   assert.match(component, /const showAttribution = layout\.attributionVisible && Boolean\(layout\.attributionCharacter \|\| layout\.attributionCreator \|\| layout\.attributionPlatform\)/);
   assert.doesNotMatch(component, /showAttribution =[^\n]*\["classic", "bubble"\]\.includes\(layout\.mode\)/);
   assert.match(component, /<\/>}\s*\{showAttribution && <div className="excerpt-attribution">/);
-  assert.match(component, /<small>모든 레이아웃<\/small>/);
+  assert.match(component, /<small>모든 템플릿<\/small>/);
 });
 
 test("messenger chrome is vertically balanced and uses a send icon", () => {
@@ -174,7 +174,7 @@ test("microfilm uses freely editable canvas dimensions", () => {
   assert.ok(getOutputSize, "getOutputSize implementation was not found");
   assert.match(getOutputSize, /layout\.mode === "microfilm"[\s\S]*design\.canvasWidth[\s\S]*design\.canvasHeight/);
   assert.doesNotMatch(getOutputSize, /layout\.mode === "microfilm"[\s\S]*fixed:\s*true/);
-  assert.match(component, /프레임과 스트립은 시작 규격만 적용합니다/);
+  assert.match(component, /가로 결과물은 필름 프레임, 긴 배너는 필름 스트립을 선택하세요/);
   assert.match(styles, /\.microfilm-sheet[^}]*grid-template-rows:\s*32px 24px minmax\(0, 1fr\) 24px 32px/);
   assert.match(styles, /\.microfilm-perforation[^}]*height:\s*13px/);
   assert.match(styles, /\.microfilm-perforation[^}]*transparent 4\.9% 7\.2%/);
@@ -188,7 +188,7 @@ test("paragraph ornaments render fixed SVG assets without modifying source text"
   assert.match(component, /"line", "ornament", "mixed"/);
   assert.match(component, /"선 \+ SVG"/);
   assert.match(component, /dividerThickness/);
-  assert.match(component, /원문 문자와 페이지 경계 기능은 이곳에서 다루지 않습니다/);
+  assert.match(component, /수정본에서 장식을 넣을 문단에 커서를 놓고 추가하세요/);
   assert.match(component, /normalizeFlowBlocks/);
   assert.match(styles, /\.flow-divider-ornament svg/);
   assert.match(styles, /\.flow-divider-mixed/);
@@ -266,14 +266,22 @@ test("one word search supports accessible per-occurrence selection for anonymizi
   assert.match(styles, /\.main-editor-highlight mark\s*\{[^}]*background:\s*rgba\(102, 148, 234, \.3\);[^}]*box-shadow:\s*none/s);
 });
 
-test("page titles and number labels can be customized globally and per page", () => {
+test("page titles and number labels use readable presets with optional per-page overrides", () => {
   assert.match(component, /pageTitleOverrides: Record<string, string>/);
   assert.match(component, /pageNumberOverrides: Record<string, string>/);
   assert.match(component, /function formatPageNumberPattern/);
+  assert.match(component, /const pageNumberPatternPresets/);
+  assert.match(component, /현재 번호/);
+  assert.match(component, /현재 \/ 전체/);
+  assert.match(component, /두 자리/);
+  assert.match(component, /장 단위/);
+  assert.match(component, /현재 표시 예시/);
   assert.match(component, /전체 페이지 기본 제목/);
-  assert.match(component, /현재 페이지 개별 설정/);
+  assert.match(component, /이 페이지만 다르게 표시/);
   assert.match(component, /\{'\{current\}'\}/);
   assert.match(component, /pageNumberLabel/);
+  assert.match(styles, /\.page-number-presets/);
+  assert.match(styles, /\.page-number-preview/);
 });
 
 test("two-column form controls share one vertical and sizing contract", () => {
