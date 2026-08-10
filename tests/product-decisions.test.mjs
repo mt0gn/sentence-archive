@@ -44,6 +44,10 @@ test("keeps manuscript to the agreed live horizontal and vertical grids", () => 
   assert.doesNotMatch(component, /원고지 사진 추가/);
   assert.match(styles, /\.layout-manuscript \.preview-overlay \{ position: absolute; inset: 0; height: 100%; min-height: 0/);
   assert.match(styles, /\.manuscript-sheet\.template-vertical \.manuscript-grid \{[^}]*grid-auto-flow: column/);
+  assert.match(component, /const effectiveBackgroundMode = design\.backgroundMode/);
+  assert.match(component, /"--manuscript-paper-color": design\.paperColor/);
+  assert.doesNotMatch(component, /layout\.mode === "manuscript" \? \{ background: design\.paperColor \}/);
+  assert.match(styles, /\.manuscript-sheet \.manuscript-cell,[\s\S]*background-color: var\(--manuscript-paper-color\)/);
 });
 
 test("includes the July 28 document, diary, and webcore overhaul", () => {

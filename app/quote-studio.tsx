@@ -350,6 +350,7 @@ type LayoutSettings = {
   attributionX: number;
   attributionY: number;
   attributionGap: number;
+  attributionOffsetVersion: 2;
   attributionPlatformOffsetY: number;
   mosaicExclusions: MosaicExclusion[];
   dialogueShowNames: boolean;
@@ -417,16 +418,18 @@ const DEFAULT_LEFT_PANEL_WIDTH = 410;
 const MIN_LEFT_PANEL_WIDTH = 350;
 const MAX_LEFT_PANEL_WIDTH = 560;
 
-const sampleText = `*늦은 밤, 빗소리가 창문을 조용히 두드렸다. 위해가 식어가는 찻잔을 두 손으로 감쌌다.*
+const sampleText = `*기울임 구문은 장면과 서술을 표시합니다.*
 
-"아직 안 잤어?"
+**굵은 구문은 강조하고 싶은 문장을 표시합니다.**
 
-*익숙한 목소리에 고개를 들자 문가에 기대 선 사람이 보였다. 대답 대신 웃자, 그도 따라 웃었다.*
+'작은따옴표 대사를 확인합니다.'
+
+"큰따옴표 대사를 확인합니다."
 
 \`\`\`
-[07월 21일 | 23:40 | 거실]
+[08월 10일 | 21:30 | 기록실]
 관계 | 오래된 친구
-상황 | 비를 피해 잠시 머무르는 중
+상황 | 늦은 밤의 대화를 기록하는 중
 \`\`\``;
 
 const toolItems: Array<{ id: WorkflowStepId; label: string; description: string; primaryTool: ToolId; tools: ToolId[] }> = [
@@ -480,10 +483,10 @@ const publicAsset = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""
 const outputColorPresets = ["#f4f1ea", "#ffffff", "#171719", "#dfe6ee", "#eadfe4", "#dfe9df", "#e9e0cf", "#343841"];
 const emptyRuleDraft: Omit<SyntaxRule, "id"> = { label: "새 규칙", start: "", end: "", role: "other", color: "#5e5e66", bold: false, italic: false, removeMarkers: false, fontId: "inherit", fontScale: 100, highlightColor: "transparent", presentation: "default", lineStyle: "none", linePosition: "below", lineColor: "#6694ea" };
 const emptyDirectStyle: DirectTextStyle = { bold: false, italic: false, color: "#2d2b2a", highlightColor: "transparent", fontId: "inherit", fontScale: 100, lineStyle: "none", linePosition: "below", lineColor: "#6694ea", bubbleSpeakerId: "", time: "", readStatus: "" };
-const fontOptions: Array<{ id: FontId; label: string; family: string; category: "고딕" | "명조" | "기타"; weight: string; cssUrl?: string; fileUrl?: string; format?: string }> = [
+const fontOptions: Array<{ id: FontId; label: string; family: string; category: "고딕" | "명조" | "기타"; weight: string; manuscriptOffsetEm?: number; cssUrl?: string; fileUrl?: string; format?: string }> = [
   { id: "pretendard", label: "프리텐다드", family: '"Pretendard", sans-serif', category: "고딕", weight: "45 920", fileUrl: publicAsset("/fonts/PretendardVariable.woff2") },
-  { id: "nanum-myeongjo", label: "나눔명조", family: '"Nanum Myeongjo", "Noto Serif KR", serif', category: "명조", weight: "400", fileUrl: publicAsset("/fonts/NanumMyeongjo-Regular.woff2") },
-  { id: "gmarket-sans", label: "G마켓 산스", family: '"Gmarket Sans", "Pretendard", sans-serif', category: "기타", weight: "500", fileUrl: publicAsset("/fonts/GmarketSansMedium.woff"), format: "woff" },
+  { id: "nanum-myeongjo", label: "나눔명조", family: '"Nanum Myeongjo", "Noto Serif KR", serif', category: "명조", weight: "400", manuscriptOffsetEm: 0.1, fileUrl: publicAsset("/fonts/NanumMyeongjo-Regular.woff2") },
+  { id: "gmarket-sans", label: "G마켓 산스", family: '"Gmarket Sans", "Pretendard", sans-serif', category: "기타", weight: "500", manuscriptOffsetEm: 0.14, fileUrl: publicAsset("/fonts/GmarketSansMedium.woff"), format: "woff" },
   { id: "mona12", label: "Mona12", family: '"Mona12", "Pretendard", sans-serif', category: "기타", weight: "400", fileUrl: publicAsset("/fonts/Mona12.woff2") },
   { id: "noto-sans", label: "노토 고딕", family: '"Noto Sans KR", sans-serif', category: "고딕", weight: "400", fileUrl: publicAsset("/fonts/NotoSansKR-Regular.woff2") },
   { id: "noto-serif", label: "노토 명조", family: '"Noto Serif KR", serif', category: "명조", weight: "400", fileUrl: publicAsset("/fonts/NotoSerifKR-Regular.woff2") },
@@ -659,8 +662,9 @@ const defaultLayout: LayoutSettings = {
   attributionCreator: "",
   attributionPlatform: "",
   attributionX: 50,
-  attributionY: 88,
-  attributionGap: 48,
+  attributionY: 84,
+  attributionGap: 0,
+  attributionOffsetVersion: 2,
   attributionPlatformOffsetY: 12,
   mosaicExclusions: [],
   dialogueShowNames: false,
@@ -713,7 +717,8 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
     attributionPlatform: String(value?.attributionPlatform || ""),
     attributionX: clamp(Number(value?.attributionX ?? defaultLayout.attributionX), 0, 100),
     attributionY: clamp(Number(value?.attributionY ?? defaultLayout.attributionY), 0, 100),
-    attributionGap: clamp(Number(value?.attributionGap ?? defaultLayout.attributionGap), 0, 240),
+    attributionGap: value?.attributionOffsetVersion === 2 ? clamp(Number(value?.attributionGap ?? defaultLayout.attributionGap), -400, 400) : 0,
+    attributionOffsetVersion: 2,
     attributionPlatformOffsetY: clamp(Number(value?.attributionPlatformOffsetY ?? defaultLayout.attributionPlatformOffsetY), 0, 100),
     mosaicExclusions: (value?.mosaicExclusions || []).filter((item) => item && typeof item.term === "string" && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start).map((item) => ({ id: item.id || makeId("mosaic-exclusion"), term: item.term, start: Math.max(0, Number(item.start)), end: Math.max(0, Number(item.end)) })),
     dialogueShowNames: Boolean(value?.dialogueShowNames),
@@ -906,7 +911,7 @@ function freshProject(title = "제목 없는 발췌", source = "", draft = ""): 
 }
 
 const starterProject: ProjectSnapshot = {
-  ...freshProject("비 오는 밤의 대화", sampleText, sampleText),
+  ...freshProject("구문 예시", sampleText, sampleText),
   id: "quote-studio-starter",
 };
 
@@ -918,6 +923,7 @@ function detectCandidates(text: string): Candidate[] {
   return [
     { id: "single-star", name: "별표 한 쌍", start: "*", end: "*", count: countMatches(text, /(?<!\*)\*([^*]+?)\*(?!\*)/gs), description: "*문장* 형태" },
     { id: "double-star", name: "별표 두 쌍", start: "**", end: "**", count: countMatches(text, /\*\*([\s\S]+?)\*\*/g), description: "**문장** 형태" },
+    { id: "single-quotes", name: "작은따옴표", start: "'", end: "'", count: countMatches(text, /'[^'\n]+'/g), description: "'문장' 형태" },
     { id: "quotes", name: "큰따옴표", start: '"', end: '"', count: countMatches(text, /"[^"\n]+"/g), description: '"문장" 형태' },
     { id: "code-block", name: "코드 블록", start: "```", end: "```", count: countMatches(text, /```[\s\S]+?```/g), description: "삼중 백틱 영역" },
     { id: "details", name: "HTML details", start: "<details>", end: "</details>", count: countMatches(text, /<details[\s\S]+?<\/details>/gi), description: "접이식 HTML 영역" },
@@ -1078,6 +1084,11 @@ function directClassNames(style: DirectTextStyle) {
 function getFontFamily(fontId: FontId | "inherit") {
   if (fontId === "inherit") return "inherit";
   return fontOptions.find((font) => font.id === fontId)?.family || "inherit";
+}
+
+function getManuscriptFontOffset(fontId: FontId | "inherit") {
+  if (fontId === "inherit") return 0;
+  return fontOptions.find((font) => font.id === fontId)?.manuscriptOffsetEm ?? 0;
 }
 
 function ruleStyle(rule: SyntaxRule): CSSProperties {
@@ -1260,8 +1271,12 @@ function ManuscriptPreview({ page, rules, mosaicTerms, columns, rows, title, pag
     const className = ["manuscript-cell", token.rule ? ruleClassNames(token.rule) : "", token.directStyle ? directClassNames(token.directStyle) : "", hiddenIndexes.has(tokenIndex) ? "is-mosaic" : ""].filter(Boolean).join(" ");
     const combinedStyle = { ...(token.rule ? ruleStyle(token.rule) : {}), ...(token.directStyle ? directStyle(token.directStyle) : {}) } as CSSProperties;
     const { fontSize, ...cellStyle } = combinedStyle;
+    const directFontId = token.directStyle?.fontId;
+    const ruleFontId = token.rule?.fontId;
+    const markedFontId = directFontId && directFontId !== "inherit" ? directFontId : ruleFontId && ruleFontId !== "inherit" ? ruleFontId : "inherit";
+    const manuscriptCellStyle = { ...cellStyle, ...(markedFontId !== "inherit" ? { "--manuscript-character-offset": `${getManuscriptFontOffset(markedFontId)}em` } : {}) } as CSSProperties;
     const hasStyle = Boolean(token.rule || token.directStyle);
-    cells.push(<span className={className} style={hasStyle ? cellStyle : undefined} title={token.rule?.label || (token.directStyle ? "직접 서식" : undefined)} key={`cell-${cellIndex++}`}><span className="manuscript-character" style={fontSize ? { fontSize } : undefined}>{token.character === " " ? "\u00a0" : token.character}</span></span>);
+    cells.push(<span className={className} style={hasStyle ? manuscriptCellStyle : undefined} title={token.rule?.label || (token.directStyle ? "직접 서식" : undefined)} key={`cell-${cellIndex++}`}><span className="manuscript-character" style={fontSize ? { fontSize } : undefined}>{token.character === " " ? "\u00a0" : token.character}</span></span>);
     linePosition = (linePosition + 1) % lineLength;
     previousWasLineBreak = false;
   }
@@ -1721,7 +1736,7 @@ function MessengerPreview({ page, rules, mosaicTerms, layout, directMarks, flowB
       {layout.chatDate && <div className="message-date-divider">{layout.chatDate}</div>}
       <MessagePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} />
     </div>
-    <div className="messenger-composer" aria-hidden="true"><span>＋</span><i>{layout.chatComposerText || "메시지 보내기"}</i><b>{isDm ? "♡" : "#"}</b></div>
+    <div className="messenger-composer" aria-hidden="true"><span>＋</span><i>{layout.chatComposerText || "메시지 보내기"}</i><b className="messenger-send"><svg viewBox="0 0 24 24"><path d="M3.4 3.2 21 12 3.4 20.8l2.2-7.1L14 12l-8.4-1.7-2.2-7.1Z" /></svg></b></div>
   </div>;
 }
 
@@ -1827,9 +1842,9 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
   const font = fontOptions.find((option) => option.id === design.fontId) ?? fontOptions[0];
   const outputSize = getOutputSize(design, layout);
   const manuscriptShape = getManuscriptShape(design);
-  const effectiveBackgroundMode = layout.mode === "manuscript" ? "solid" : design.backgroundMode;
+  const effectiveBackgroundMode = design.backgroundMode;
   const style = {
-    ...(layout.mode === "manuscript" ? { background: design.paperColor } : backgroundStyle(design)),
+    ...backgroundStyle(design),
     aspectRatio: `${outputSize.width} / ${outputSize.height}`,
     ...(fixedSize ? { width: `${outputSize.width}px`, height: `${outputSize.height}px` } : {}),
     "--preview-font": font.family,
@@ -1855,6 +1870,8 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
     "--attribution-shift-y": `${-layout.attributionY}%`,
     "--attribution-gap": `${layout.attributionGap}px`,
     "--attribution-platform-offset-y": `${layout.attributionPlatformOffsetY}px`,
+    "--manuscript-paper-color": design.paperColor,
+    "--manuscript-character-offset": `${getManuscriptFontOffset(font.id)}em`,
   } as CSSProperties;
   const overlayStyle = {
     backgroundColor: effectiveBackgroundMode === "image" ? colorWithOpacity(design.overlayColor, design.overlayOpacity / 100) : "transparent",
@@ -1863,7 +1880,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
   } as CSSProperties;
   const phoneMessenger = layout.mode === "messenger";
   const bookMode = layout.mode === "classic" && layout.bookFeaturesEnabled;
-  const showAttribution = layout.attributionVisible && !bookMode && ["classic", "bubble"].includes(layout.mode) && Boolean(layout.attributionCharacter || layout.attributionCreator || layout.attributionPlatform);
+  const showAttribution = layout.attributionVisible && Boolean(layout.attributionCharacter || layout.attributionCreator || layout.attributionPlatform);
   const hasFooterPageNumber = !["manuscript", "document"].includes(layout.mode) && (design.showPageNumber || bookMode);
   const layoutClass = phoneMessenger ? `layout-messenger layout-${layout.messengerStyle}` : `layout-${layout.mode}`;
   const pageTitle = layout.pageTitleOverrides[page.id] || layout.pageTitle || title || "제목 없는 발췌";
@@ -1880,10 +1897,10 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
           {bookMode && layout.chapterTitle && <div className="book-chapter"><small>CHAPTER</small><h3>{layout.chapterTitle}</h3></div>}
           {layout.mode === "manuscript" ? <ManuscriptPreview page={page} rules={rules} mosaicTerms={mosaicTerms} columns={manuscriptShape.columns} rows={manuscriptShape.rows} title={title} pageNumber={pageNumber} surface={design.surfaceSize} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "notebook" ? <NotebookPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "microfilm" ? <MicrofilmPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "document" ? <DocumentPreview page={page} pageNumber={pageNumber} totalPages={totalPages} title={title} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "webcore" ? <WebcorePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : phoneMessenger ? <MessengerPreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "bubble" ? <MessagePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : <PreviewText text={page.text} rules={rules} mosaicTerms={mosaicTerms} paragraphIndent={bookMode && layout.paragraphIndent} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} baseOffset={page.startOffset} layout={layout} />}
         </div>
-        {showAttribution && <div className="excerpt-attribution"><div className="excerpt-byline">{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && <i aria-hidden="true" />}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div>{layout.attributionPlatform && <strong>{layout.attributionPlatform}</strong>}</div>}
         {!phoneMessenger && scrapbookPage && scrapbookPage.elements.some((element) => element.kind === "image") && <ScrapbookPreview page={page} pageState={scrapbookPage} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} layout={layout} selectedId={scrapbookSelectedId} editable={Boolean(onScrapbookChange)} onSelect={onScrapbookSelect} onChange={onScrapbookChange} />}
         {hasFooterPageNumber && <div className="preview-page-number">{pageNumberLabel}</div>}
       </>}
+      {showAttribution && <div className="excerpt-attribution"><div className="excerpt-byline">{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && <i aria-hidden="true" />}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div>{layout.attributionPlatform && <strong>{layout.attributionPlatform}</strong>}</div>}
     </div>
   </div>;
 }
@@ -3310,18 +3327,18 @@ export default function QuoteStudio() {
     if (activeTool === "edit") return <div className="tool-content">
       <div className="section-heading"><span className="eyebrow">STEP 03 · CONTENT</span><h2>본문·문단 장식</h2><p>본문을 다듬고 선택 서식, 문단 구분 장식과 페이지 경계를 정합니다.</p></div>
       <div className="control-card attribution-control">
-        <div className="history-heading"><span className="field-label">발췌 정보</span><small>기본·말풍선 캔버스</small></div>
+        <div className="history-heading"><span className="field-label">발췌 정보</span><small>모든 레이아웃</small></div>
         <label className="check-control wide-check"><input type="checkbox" checked={layout.attributionVisible} onChange={(event) => setLayout((current) => ({ ...current, attributionVisible: event.target.checked }))} />캔버스에 발췌 정보 표시</label>
         <div className="split-fields"><label>캐릭터명<input value={layout.attributionCharacter} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCharacter: event.target.value }))} placeholder="예: 위해" /></label><label>제작자<input value={layout.attributionCreator} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCreator: event.target.value }))} placeholder="예: wesea" /></label></div>
         <label>플랫폼명<input value={layout.attributionPlatform} maxLength={80} onChange={(event) => setLayout((current) => ({ ...current, attributionPlatform: event.target.value }))} placeholder="예: site name" /></label>
-        <p className="helper-note">캐릭터명·제작자·플랫폼명을 하나의 박스로 함께 이동합니다. 빈 항목은 자동으로 숨깁니다.</p>
+        <p className="helper-note">캐릭터명·제작자·플랫폼명을 하나의 박스로 함께 이동합니다. 플랫폼 가로 위치 0px는 위 줄과 정확한 좌측 정렬이며, 값을 조절해 중앙선이나 원하는 단차를 맞출 수 있습니다. 빈 항목은 자동으로 숨깁니다.</p>
         {layout.attributionVisible && <div className="attribution-position-controls">
           <span className="mini-label">발췌 정보 박스 위치</span>
           <label className="range-label"><span>가로 위치<b>{layout.attributionX}%</b></span><input type="range" min="0" max="100" value={layout.attributionX} onChange={(event) => setLayout((current) => ({ ...current, attributionX: Number(event.target.value) }))} /></label>
           <label className="range-label"><span>세로 위치<b>{layout.attributionY}%</b></span><input type="range" min="0" max="100" value={layout.attributionY} onChange={(event) => setLayout((current) => ({ ...current, attributionY: Number(event.target.value) }))} /></label>
-          <label className="range-label"><span>캐릭터·제작자와 플랫폼 사이<b>{layout.attributionGap}px</b></span><input type="range" min="0" max="240" step="4" value={layout.attributionGap} onChange={(event) => setLayout((current) => ({ ...current, attributionGap: Number(event.target.value) }))} /></label>
+          <label className="range-label"><span>플랫폼 가로 위치<b>{layout.attributionGap}px</b></span><input type="range" min="-400" max="400" step="1" value={layout.attributionGap} onChange={(event) => setLayout((current) => ({ ...current, attributionGap: Number(event.target.value) }))} /></label>
           <label className="range-label"><span>플랫폼 세로 단차<b>{layout.attributionPlatformOffsetY}px</b></span><input type="range" min="0" max="100" value={layout.attributionPlatformOffsetY} onChange={(event) => setLayout((current) => ({ ...current, attributionPlatformOffsetY: Number(event.target.value) }))} /></label>
-          <button className="secondary-button full-button" onClick={() => setLayout((current) => ({ ...current, attributionX: 50, attributionY: 88, attributionGap: 48, attributionPlatformOffsetY: 12 }))}>위치·간격 초기화</button>
+          <button className="secondary-button full-button" onClick={() => setLayout((current) => ({ ...current, attributionX: 50, attributionY: 84, attributionGap: 0, attributionPlatformOffsetY: 12 }))}>위치·간격 초기화</button>
         </div>}
       </div>
       <div className="control-card direct-style-card"><div className="history-heading"><span className="field-label">글자 서식</span><small>{directMarks.length}개 적용</small></div><p className="helper-note">본문 기본색과 선택 영역 서식을 설정합니다.</p>
@@ -3406,7 +3423,7 @@ export default function QuoteStudio() {
     </div>;
 
     if (activeTool === "design") {
-      const modes: Array<{ id: BackgroundMode; label: string }> = [{ id: "solid", label: "단색" }, { id: "gradient", label: "선형 그라데이션" }, { id: "image", label: "이미지" }, { id: "dot", label: "도트" }, { id: "radial", label: "중앙 빛번짐" }, { id: "check", label: "체크" }];
+      const modes: Array<{ id: BackgroundMode; label: string }> = [{ id: "solid", label: "단색" }, { id: "gradient", label: "그라데이션" }, { id: "image", label: "이미지" }, { id: "dot", label: "도트" }, { id: "radial", label: "빛번짐" }, { id: "check", label: "체크" }];
       return <div className="tool-content">
         <div className="section-heading"><span className="eyebrow">STEP 04 · DESIGN</span><h2>시각 디자인</h2><p>선택한 템플릿의 배경, 글꼴, 간격과 여백을 조정합니다.</p></div>
         <div className="structure-guide"><b>디자인</b><span>보이는 방식</span><i>배경 · 글꼴 · 색 · 여백</i></div>
@@ -3479,7 +3496,7 @@ export default function QuoteStudio() {
         <label className="range-label"><span>세로 위치<b>{layout.manuscriptGridY}%</b></span><input type="range" min="0" max="100" value={layout.manuscriptGridY} onChange={(event) => setLayout((current) => ({ ...current, manuscriptGridY: Number(event.target.value) }))} /></label>
         <label className="range-label"><span>칸 영역 너비<b>{layout.manuscriptGridWidth}%</b></span><input type="range" min="30" max="96" value={layout.manuscriptGridWidth} onChange={(event) => setLayout((current) => ({ ...current, manuscriptGridWidth: Number(event.target.value) }))} /></label>
         <p className="helper-note">글자 크기는 그대로 유지하고 원고지 칸 영역을 확대·축소합니다. 정사각형 칸 비율에 맞춰 영역 높이도 함께 조정됩니다.</p>
-        <div className="split-fields aligned-color-fields"><label>종이색<input type="color" value={design.paperColor} onChange={(event) => setDesign((current) => ({ ...current, backgroundMode: "solid", solidColor: event.target.value, paperColor: event.target.value }))} /></label><label>괘선색<input type="color" value={layout.manuscriptGridColor} onChange={(event) => setLayout((current) => ({ ...current, manuscriptGridColor: event.target.value }))} /></label></div>
+        <div className="split-fields aligned-color-fields"><label>종이색<input type="color" value={design.paperColor} onChange={(event) => setDesign((current) => ({ ...current, paperColor: event.target.value }))} /></label><label>괘선색<input type="color" value={layout.manuscriptGridColor} onChange={(event) => setLayout((current) => ({ ...current, manuscriptGridColor: event.target.value }))} /></label></div>
         <div className="messenger-options"><label><input type="checkbox" checked={layout.manuscriptShowHeader} onChange={(event) => setLayout((current) => ({ ...current, manuscriptShowHeader: event.target.checked }))} />제목란</label><label><input type="checkbox" checked={layout.manuscriptShowPageNumber} onChange={(event) => setLayout((current) => ({ ...current, manuscriptShowPageNumber: event.target.checked }))} />매수</label><label><input type="checkbox" checked={layout.manuscriptShowFooter} onChange={(event) => setLayout((current) => ({ ...current, manuscriptShowFooter: event.target.checked }))} />꼬리말</label></div>
         {layout.manuscriptShowHeader && <><label>원고 제목<input value={layout.manuscriptTitle} onChange={(event) => setLayout((current) => ({ ...current, manuscriptTitle: event.target.value }))} placeholder={projectTitle} /></label><div className="split-fields"><label>제목 항목명<input value={layout.manuscriptTitleLabel} onChange={(event) => setLayout((current) => ({ ...current, manuscriptTitleLabel: event.target.value }))} /></label>{layout.manuscriptShowPageNumber && <label>매수 항목명<input value={layout.manuscriptSheetLabel} onChange={(event) => setLayout((current) => ({ ...current, manuscriptSheetLabel: event.target.value }))} /></label>}</div></>}
         {layout.manuscriptShowFooter && <><label>왼쪽 하단 문구<input value={layout.manuscriptFooterLeft} onChange={(event) => setLayout((current) => ({ ...current, manuscriptFooterLeft: event.target.value }))} /></label><label>오른쪽 하단 문구<input value={layout.manuscriptFooterRight} onChange={(event) => setLayout((current) => ({ ...current, manuscriptFooterRight: event.target.value }))} /></label></>}

@@ -49,6 +49,16 @@ test("manuscript formatting scales the character inside a fixed-size grid cell",
   assert.match(styles, /\.manuscript-character\s*\{[^}]*display:\s*grid;/s);
 });
 
+test("manuscript applies optical vertical correction for asymmetric font metrics", () => {
+  assert.match(component, /id: "nanum-myeongjo"[^\n]*manuscriptOffsetEm:\s*0\.1/);
+  assert.match(component, /id: "gmarket-sans"[^\n]*manuscriptOffsetEm:\s*0\.14/);
+  assert.match(component, /getManuscriptFontOffset\(font\.id\)/);
+  assert.match(component, /markedFontId !== "inherit"[^\n]*--manuscript-character-offset/);
+  assert.match(styles, /\.manuscript-cell[^}]*font-size:\s*var\(--text-size\)/s);
+  assert.doesNotMatch(styles, /\.manuscript-cell[^}]*font-size:[^;}]*0\.8em/s);
+  assert.match(styles, /\.manuscript-character[^}]*translateY\(var\(--manuscript-character-offset, 0\)\)/s);
+});
+
 test("manuscript line breaks do not skip a row after an exactly filled line", () => {
   const manuscriptPreview = component.match(
     /function ManuscriptPreview\([\s\S]*?\n\}\n\nfunction NotebookPreview/,
@@ -63,12 +73,45 @@ test("manuscript line breaks do not skip a row after an exactly filled line", ()
 
 test("excerpt attribution uses neutral creator terminology and examples", () => {
   assert.match(component, /attributionVisible:\s*false/);
+  assert.match(component, /attributionX:\s*50/);
+  assert.match(component, /attributionY:\s*84/);
   assert.match(component, /캐릭터명/);
   assert.match(component, /제작자/);
   assert.match(component, /플랫폼명/);
   assert.match(component, /placeholder="예: 위해"/);
   assert.match(component, /placeholder="예: wesea"/);
   assert.match(component, /placeholder="예: site name"/);
+});
+
+test("excerpt attribution platform can move left of the byline endpoint", () => {
+  assert.match(component, /attributionOffsetVersion:\s*2/);
+  assert.match(component, /attributionGap:\s*value\?\.attributionOffsetVersion === 2 \? clamp\([^\n]*, -400, 400\) : 0/);
+  assert.match(component, /플랫폼 가로 위치[^\n]*type="range" min="-400" max="400" step="1"[^\n]*attributionGap/);
+  assert.match(styles, /\.excerpt-attribution[^}]*display:\s*inline-flex[^}]*flex-direction:\s*column[^}]*align-items:\s*flex-start/s);
+  assert.match(styles, /\.excerpt-attribution strong[^}]*translateX\(var\(--attribution-gap\)\)/s);
+});
+
+test("starter copy demonstrates every supported syntax candidate", () => {
+  assert.match(component, /\*기울임 구문은 장면과 서술을 표시합니다\.\*/);
+  assert.match(component, /\*\*굵은 구문은 강조하고 싶은 문장을 표시합니다\.\*\*/);
+  assert.match(component, /'작은따옴표 대사를 확인합니다\.'/);
+  assert.match(component, /"큰따옴표 대사를 확인합니다\."/);
+  assert.match(component, /\[08월 10일 \| 21:30 \| 기록실\]/);
+  assert.match(component, /id: "single-quotes"[\s\S]*name: "작은따옴표"/);
+});
+
+test("attribution is rendered above every layout rather than limited by layout mode", () => {
+  assert.match(component, /const showAttribution = layout\.attributionVisible && Boolean\(layout\.attributionCharacter \|\| layout\.attributionCreator \|\| layout\.attributionPlatform\)/);
+  assert.doesNotMatch(component, /showAttribution =[^\n]*\["classic", "bubble"\]\.includes\(layout\.mode\)/);
+  assert.match(component, /<\/>}\s*\{showAttribution && <div className="excerpt-attribution">/);
+  assert.match(component, /<small>모든 레이아웃<\/small>/);
+});
+
+test("messenger chrome is vertically balanced and uses a send icon", () => {
+  assert.match(component, /className="messenger-send"><svg viewBox="0 0 24 24">/);
+  assert.doesNotMatch(component, /isDm \? "♡" : "#"/);
+  assert.match(styles, /\.messenger-shell[^}]*grid-template-rows:\s*2\.05em 3\.8em minmax\(0, 1fr\) 5\.85em/);
+  assert.match(styles, /\.messenger-composer b svg[^}]*fill:\s*currentColor/);
 });
 
 test("dialogue rules support directional line styles and per-character assignment", () => {
@@ -165,7 +208,7 @@ test("page headings stay restrained and page numbers respect the canvas padding"
   assert.match(styles, /\.preview-page-number[^}]*font-size:\s*max\(12px, calc\(var\(--text-size\) \* \.82\)\)/);
   assert.match(component, /hasFooterPageNumber/);
   assert.match(component, /showAttribution && hasFooterPageNumber \? "has-page-number"/);
-  assert.match(styles, /\.has-attribution \.preview-page-number[^}]*right:\s*var\(--padding-right\)[^}]*bottom:\s*var\(--padding-bottom\)/s);
+  assert.match(styles, /\.layout-classic\.has-attribution \.preview-page-number[^}]*right:\s*var\(--padding-right\)[^}]*bottom:\s*var\(--padding-bottom\)/s);
 });
 
 test("the header kicker and movable attribution box are user controlled", () => {
@@ -177,12 +220,13 @@ test("the header kicker and movable attribution box are user controlled", () => 
   assert.match(component, /attributionGap: number/);
   assert.match(component, /attributionPlatformOffsetY: number/);
   assert.match(component, /발췌 정보 박스 위치/);
-  assert.match(component, /캐릭터·제작자와 플랫폼 사이/);
+  assert.match(component, /플랫폼 가로 위치/);
   assert.match(component, /플랫폼 세로 단차/);
   assert.match(component, /가로 위치[^\n]*type="range" min="0" max="100"[^\n]*attributionX/);
   assert.match(component, /세로 위치[^\n]*type="range" min="0" max="100"[^\n]*attributionY/);
-  assert.match(styles, /\.excerpt-attribution[^}]*top:\s*var\(--attribution-y\)[^}]*left:\s*var\(--attribution-x\)[^}]*gap:\s*\.7em var\(--attribution-gap\)/s);
+  assert.match(styles, /\.excerpt-attribution[^}]*top:\s*var\(--attribution-y\)[^}]*left:\s*var\(--attribution-x\)[^}]*display:\s*inline-flex[^}]*flex-direction:\s*column/s);
   assert.match(styles, /\.excerpt-attribution strong[^}]*margin-top:\s*var\(--attribution-platform-offset-y\)/s);
+  assert.match(styles, /\.excerpt-attribution strong[^}]*transform:\s*translateX\(var\(--attribution-gap\)\)/s);
   assert.match(styles, /transform:\s*translate\(var\(--attribution-shift-x\), var\(--attribution-shift-y\)\)/);
 });
 
@@ -252,7 +296,8 @@ test("notebook leaves its first rule free and keeps emphasis on fixed rows", () 
 test("basic backgrounds provide dot radial and check modes without paper texture", () => {
   assert.match(component, /type BackgroundMode = "solid" \| "gradient" \| "image" \| "dot" \| "radial" \| "check"/);
   assert.match(component, /id: "dot", label: "도트"/);
-  assert.match(component, /id: "radial", label: "중앙 빛번짐"/);
+  assert.match(component, /id: "gradient", label: "그라데이션"/);
+  assert.match(component, /id: "radial", label: "빛번짐"/);
   assert.match(component, /id: "check", label: "체크"/);
   assert.match(component, /type GlowShape = "circle" \| "star" \| "clover" \| "heart" \| "flower" \| "sparkle"/);
   assert.match(component, /radialGlows: RadialGlow\[\]/);
