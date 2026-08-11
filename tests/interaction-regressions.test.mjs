@@ -336,14 +336,26 @@ test("basic backgrounds provide dot radial and check modes without paper texture
 test("blank-line paragraphs can be manually classified and rendered without speakers", () => {
   assert.match(paragraphBlocks, /export type ParagraphRole = "dialogue" \| "narration" \| "thought" \| "other"/);
   assert.match(paragraphBlocks, /export type ParagraphPresentation = "line" \| "bubble" \| "quote"/);
+  assert.match(paragraphBlocks, /presentationColor\?: string/);
+  assert.match(paragraphBlocks, /bold\?: boolean/);
+  assert.match(paragraphBlocks, /italic\?: boolean/);
   assert.match(paragraphBlocks, /const matcher = \/\[\^\\n\]\(\?:\[\\s\\S\]\*\?\)\(\?=\\n\{2,\}\|\$\)\/g/);
-  assert.match(component, /공백 기준 문단 확인/);
+  assert.match(component, /공백 기준 문단 선택/);
+  assert.match(component, /여러 문단을 함께 선택할 수 있습니다/);
+  assert.match(component, /ruleEditorAnchor === candidate\.id/);
+  assert.match(component, /renderRuleBuilder\("candidate-rule-builder"\)/);
+  assert.match(component, /형광펜이 최우선이며, 그다음은 선택 문단의 직접 지정 서식입니다/);
   assert.match(component, /미지정 선택/);
   assert.match(component, /서술 사이 선택/);
   assert.match(component, /applyParagraphMarkPatch\(\{ presentation: "bubble" \}, true\)/);
   assert.match(component, /paragraphMarks=\{paragraphMarks\}/);
+  assert.match(component, /선택 문단에 서식 적용/);
+  assert.match(component, /문단 표현 색/);
+  assert.match(component, /paragraphMark\?\.presentationColor/);
   assert.match(styles, /\.preview-copy p\.paragraph-presentation-bubble/);
   assert.match(styles, /\.preview-copy p\.paragraph-presentation-quote/);
+  assert.match(styles, /\.preview-copy p\.paragraph-is-bold/);
+  assert.match(styles, /--paragraph-presentation-color/);
   assert.match(component, /\["bubble", "messenger"\]\.includes\(layout\.mode\) && <div className="control-card dialogue-character-card"/);
 });
 
@@ -353,4 +365,31 @@ test("dialogue syntax rules can request a paragraph presentation", () => {
   assert.match(component, /ruleDraft\.presentation === "bubble"/);
   assert.match(component, /ruleDraft\.presentation === "quote"/);
   assert.match(component, /dialogueRule\?\.presentation !== "default"/);
+});
+
+test("selection highlights are independent and render above every other text style", () => {
+  assert.match(component, /kind\?: "format" \| "highlight"/);
+  assert.match(component, /function applyHighlight\(color: string\)/);
+  assert.match(component, /function clearHighlight\(\)/);
+  assert.match(component, /className="control-card highlight-card"/);
+  assert.match(component, /형광펜은 구문 규칙과 다른 선택 서식보다 항상 위에 표시됩니다/);
+  assert.match(component, /const highlightedContent = highlightColor !== "transparent"/);
+  assert.match(component, /const directlyFormattedContent = formatMark \? <span/);
+  assert.match(component, /const combinedNode = segment\.rule \? <span/);
+  assert.match(styles, /\.direct-highlight\s*\{[^}]*box-decoration-break:\s*clone/s);
+});
+
+test("global and selected text colors are clearly separated in one compact format card", () => {
+  assert.match(component, /본문 기본색은 전체 글자에 적용됩니다/);
+  assert.match(component, /선택 글자색과 나머지 서식은 수정본에서 선택한 범위만 바꿉니다/);
+  assert.match(component, /className="text-color-pair"/);
+  assert.match(component, />선택 글자색<input/);
+  assert.match(component, /<span>굵게<\/span>/);
+  assert.match(component, /<span>기울임<\/span>/);
+  assert.match(component, />선택 영역 서식 지정<\/span>/);
+  assert.match(component, /aria-label="선택 영역 서식 지우기"/);
+  assert.match(component, />서식 지우기<\/button>/);
+  assert.match(styles, /\.quick-style-row\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+  assert.match(styles, /\.quick-style-row button:last-child\s*\{[^}]*grid-column:\s*auto/s);
+  assert.match(styles, /\.text-color-pair\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/s);
 });

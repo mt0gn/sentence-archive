@@ -1,5 +1,6 @@
 export type ParagraphRole = "dialogue" | "narration" | "thought" | "other";
 export type ParagraphPresentation = "line" | "bubble" | "quote";
+export type ParagraphLineStyle = "vertical-solid" | "vertical-double" | "vertical-dotted" | "vertical-dashed" | "horizontal-short" | "horizontal-double" | "horizontal-dotted" | "horizontal-dashed";
 
 export type ParagraphMark = {
   id: string;
@@ -7,6 +8,12 @@ export type ParagraphMark = {
   end: number;
   role?: ParagraphRole;
   presentation?: ParagraphPresentation;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  presentationColor?: string;
+  lineStyle?: ParagraphLineStyle;
+  linePosition?: "above" | "below";
 };
 
 export type ParagraphSlice = {
@@ -17,6 +24,8 @@ export type ParagraphSlice = {
 
 const paragraphRoles = new Set<ParagraphRole>(["dialogue", "narration", "thought", "other"]);
 const paragraphPresentations = new Set<ParagraphPresentation>(["line", "bubble", "quote"]);
+const paragraphLineStyles = new Set<ParagraphLineStyle>(["vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"]);
+const colorPattern = /^#[0-9a-f]{6}$/i;
 
 export function splitParagraphsWithOffsets(text: string): ParagraphSlice[] {
   const output: ParagraphSlice[] = [];
@@ -46,13 +55,25 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
     const role = paragraphRoles.has(mark.role as ParagraphRole) ? mark.role : undefined;
     const presentation = paragraphPresentations.has(mark.presentation as ParagraphPresentation) ? mark.presentation : undefined;
-    if (!role && !presentation) return [];
+    const color = colorPattern.test(mark.color || "") ? mark.color : undefined;
+    const presentationColor = colorPattern.test(mark.presentationColor || "") ? mark.presentationColor : undefined;
+    const bold = mark.bold === true ? true : undefined;
+    const italic = mark.italic === true ? true : undefined;
+    const lineStyle = paragraphLineStyles.has(mark.lineStyle as ParagraphLineStyle) ? mark.lineStyle : undefined;
+    const linePosition = mark.linePosition === "above" || mark.linePosition === "below" ? mark.linePosition : undefined;
+    if (!role && !presentation && !color && !bold && !italic && !presentationColor && !lineStyle && !linePosition) return [];
     return [{
       id: mark.id || `paragraph-mark-${index}-${start}`,
       start,
       end,
       role,
       presentation,
+      color,
+      bold,
+      italic,
+      presentationColor,
+      lineStyle,
+      linePosition,
     }];
   });
 }
