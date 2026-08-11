@@ -114,14 +114,17 @@ test("messenger chrome is vertically balanced and uses a send icon", () => {
   assert.match(styles, /\.messenger-composer b svg[^}]*fill:\s*currentColor/);
 });
 
-test("dialogue rules support directional line styles and per-character assignment", () => {
-  assert.match(component, /대사강조선/);
-  assert.doesNotMatch(component, /대사 강조선/);
-  assert.match(component, /세로 실선[\s\S]*세로 이중선[\s\S]*세로 점선[\s\S]*세로 파선[\s\S]*가로 실선[\s\S]*가로 이중선[\s\S]*가로 점선[\s\S]*가로 파선/);
-  assert.doesNotMatch(component, /이중 세로선|짧은 가로선|이중 가로선/);
+test("dialogue rules use vertical line styles and per-character assignment", () => {
+  assert.match(component, />강조</);
+  assert.match(component, />인용</);
+  assert.doesNotMatch(component, /대사강조선|대사 강조선/);
+  assert.match(component, /"solid", "double", "dotted", "dashed"/);
+  assert.doesNotMatch(component, /getLineOrientation|composeLineStyle/);
+  assert.doesNotMatch(component, /value: "horizontal-(?:short|double|dotted|dashed)", label:/);
   assert.match(component, /vertical-dotted/);
   assert.match(component, /vertical-dashed/);
-  assert.doesNotMatch(component, /<option value="horizontal-long">/);
+  assert.match(component, /function verticalizeLineStyle/);
+  assert.match(component, /lineClasses = rule\.presentation === "line" \|\| rule\.presentation === "quote"/);
   assert.match(component, /메신저 화자 구분/);
   assert.match(component, /const globalParagraphStart = baseOffset \+ paragraph\.start/);
   assert.match(component, /const assignmentKey = `text:\$\{globalParagraphStart\}`/);
@@ -297,8 +300,6 @@ test("notebook leaves its first rule free and keeps emphasis on fixed rows", () 
   assert.match(component, /가장 위의 좁은 줄은 비워 두고, 본문은 두 번째 줄부터 시작합니다/);
   assert.match(styles, /\.notebook-copy\s*\{[^}]*top:\s*var\(--notebook-rule\)/s);
   assert.match(styles, /\.layout-notebook \.preview-copy \.line-vertical-solid,[\s\S]*?display:\s*inline;[\s\S]*?margin:\s*0;/);
-  assert.match(styles, /\.layout-notebook \.preview-copy \.line-horizontal-short,[\s\S]*?min-height:\s*var\(--notebook-rule\);[\s\S]*?padding-block:\s*0;/);
-  assert.match(styles, /p\.has-dialogue-line\[class\*="dialogue-line-horizontal"\][\s\S]*?height:\s*var\(--notebook-rule\);[\s\S]*?margin:\s*0;/);
 });
 
 test("basic backgrounds provide dot radial and check modes without paper texture", () => {
@@ -344,14 +345,15 @@ test("blank-line paragraphs can be manually classified and rendered without spea
   assert.match(component, /여러 문단을 함께 선택할 수 있습니다/);
   assert.match(component, /ruleEditorAnchor === candidate\.id/);
   assert.match(component, /renderRuleBuilder\("candidate-rule-builder"\)/);
-  assert.match(component, /형광펜이 최우선이며, 그다음은 선택 문단의 직접 지정 서식입니다/);
+  assert.doesNotMatch(component, /형광펜이 최우선이며, 그다음은 선택 문단의 직접 지정 서식입니다/);
   assert.match(component, /미지정 선택/);
   assert.match(component, /서술 사이 선택/);
-  assert.match(component, /applyParagraphMarkPatch\(\{ presentation: "bubble" \}, true\)/);
+  assert.match(component, /applyParagraphMarkPatch\(\{ presentation: "bubble", presentationColor: paragraphStyleDraft\.presentationColor \}\)/);
   assert.match(component, /paragraphMarks=\{paragraphMarks\}/);
   assert.match(component, /선택 문단에 서식 적용/);
   assert.match(component, /문단 표현 색/);
   assert.match(component, /paragraphMark\?\.presentationColor/);
+  assert.doesNotMatch(component, /본문색 따름|기본색 따름|모양 직접 지정/);
   assert.match(styles, /\.preview-copy p\.paragraph-presentation-bubble/);
   assert.match(styles, /\.preview-copy p\.paragraph-presentation-quote/);
   assert.match(styles, /\.preview-copy p\.paragraph-is-bold/);
@@ -359,12 +361,24 @@ test("blank-line paragraphs can be manually classified and rendered without spea
   assert.match(component, /\["bubble", "messenger"\]\.includes\(layout\.mode\) && <div className="control-card dialogue-character-card"/);
 });
 
-test("dialogue syntax rules can request a paragraph presentation", () => {
+test("every syntax role can request a paragraph presentation", () => {
   assert.match(component, /type RulePresentation = "default" \| ParagraphPresentation/);
   assert.match(component, /presentation: RulePresentation/);
+  assert.match(component, />표현 방식<\/span>/);
+  assert.doesNotMatch(component, /disabled=\{ruleDraft\.role !== "dialogue"\}/);
+  assert.match(component, /const presentationRule = parsedParagraph\.find/);
   assert.match(component, /ruleDraft\.presentation === "bubble"/);
   assert.match(component, /ruleDraft\.presentation === "quote"/);
-  assert.match(component, /dialogueRule\?\.presentation !== "default"/);
+  assert.match(component, /const presentation = paragraphMark\?\.presentation \|\| presentationRule\?\.presentation/);
+});
+
+test("saving an inline detected rule restores its candidate card instead of falling through to paragraph review", () => {
+  assert.match(component, /const toolPanelRef = useRef<HTMLElement \| null>\(null\)/);
+  assert.match(component, /const pendingRuleScrollAnchorRef = useRef<string \| null>\(null\)/);
+  assert.match(component, /pendingRuleScrollAnchorRef\.current = ruleEditorAnchor && ruleEditorAnchor !== "manual" \? ruleEditorAnchor : null/);
+  assert.match(component, /data-rule-candidate=\{candidate\.id\}/);
+  assert.match(component, /panel\.scrollTop = clamp\(nextScrollTop, 0, panel\.scrollHeight - panel\.clientHeight\)/);
+  assert.match(component, /<section ref=\{toolPanelRef\} className="tool-panel">/);
 });
 
 test("selection highlights are independent and render above every other text style", () => {
@@ -372,6 +386,9 @@ test("selection highlights are independent and render above every other text sty
   assert.match(component, /function applyHighlight\(color: string\)/);
   assert.match(component, /function clearHighlight\(\)/);
   assert.match(component, /className="control-card highlight-card"/);
+  assert.doesNotMatch(component, /className="highlight-control"/);
+  assert.match(component, /highlightColor: "transparent",/);
+  assert.doesNotMatch(component, /backgroundColor: rule\.highlightColor/);
   assert.match(component, /형광펜은 구문 규칙과 다른 선택 서식보다 항상 위에 표시됩니다/);
   assert.match(component, /const highlightedContent = highlightColor !== "transparent"/);
   assert.match(component, /const directlyFormattedContent = formatMark \? <span/);

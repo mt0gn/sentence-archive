@@ -27,6 +27,14 @@ const paragraphPresentations = new Set<ParagraphPresentation>(["line", "bubble",
 const paragraphLineStyles = new Set<ParagraphLineStyle>(["vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"]);
 const colorPattern = /^#[0-9a-f]{6}$/i;
 
+function verticalizeParagraphLineStyle(lineStyle?: ParagraphLineStyle): ParagraphLineStyle | undefined {
+  if (!lineStyle || lineStyle.startsWith("vertical")) return lineStyle;
+  if (lineStyle === "horizontal-double") return "vertical-double";
+  if (lineStyle === "horizontal-dotted") return "vertical-dotted";
+  if (lineStyle === "horizontal-dashed") return "vertical-dashed";
+  return "vertical-solid";
+}
+
 export function splitParagraphsWithOffsets(text: string): ParagraphSlice[] {
   const output: ParagraphSlice[] = [];
   const matcher = /[^\n](?:[\s\S]*?)(?=\n{2,}|$)/g;
@@ -59,7 +67,7 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
     const presentationColor = colorPattern.test(mark.presentationColor || "") ? mark.presentationColor : undefined;
     const bold = mark.bold === true ? true : undefined;
     const italic = mark.italic === true ? true : undefined;
-    const lineStyle = paragraphLineStyles.has(mark.lineStyle as ParagraphLineStyle) ? mark.lineStyle : undefined;
+    const lineStyle = paragraphLineStyles.has(mark.lineStyle as ParagraphLineStyle) ? verticalizeParagraphLineStyle(mark.lineStyle) : undefined;
     const linePosition = mark.linePosition === "above" || mark.linePosition === "below" ? mark.linePosition : undefined;
     if (!role && !presentation && !color && !bold && !italic && !presentationColor && !lineStyle && !linePosition) return [];
     return [{

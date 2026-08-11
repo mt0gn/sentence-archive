@@ -49,6 +49,8 @@ type ImageFit = "cover" | "contain" | "stretch";
 type TextLineStyle = "none" | "vertical-solid" | "vertical-double" | "vertical-dotted" | "vertical-dashed" | "horizontal-short" | "horizontal-double" | "horizontal-dotted" | "horizontal-dashed";
 type RuleLineStyle = TextLineStyle;
 type RulePresentation = "default" | ParagraphPresentation;
+type LinePurpose = "emphasis" | "quote";
+type LineStroke = "solid" | "double" | "dotted" | "dashed";
 type ParagraphMarkPatch = {
   role?: ParagraphRole | null;
   presentation?: ParagraphPresentation | null;
@@ -475,11 +477,23 @@ const textLineStyleOptions: Array<{ value: TextLineStyle; label: string }> = [
   { value: "vertical-double", label: "세로 이중선" },
   { value: "vertical-dotted", label: "세로 점선" },
   { value: "vertical-dashed", label: "세로 파선" },
-  { value: "horizontal-short", label: "가로 실선" },
-  { value: "horizontal-double", label: "가로 이중선" },
-  { value: "horizontal-dotted", label: "가로 점선" },
-  { value: "horizontal-dashed", label: "가로 파선" },
 ];
+
+function getLineStroke(style: TextLineStyle): LineStroke {
+  if (style.endsWith("double")) return "double";
+  if (style.endsWith("dotted")) return "dotted";
+  if (style.endsWith("dashed")) return "dashed";
+  return "solid";
+}
+
+function composeVerticalLineStyle(stroke: LineStroke): ParagraphLineStyle {
+  return `vertical-${stroke}` as ParagraphLineStyle;
+}
+
+function verticalizeLineStyle(style: TextLineStyle): TextLineStyle {
+  if (style === "none" || style.startsWith("vertical")) return style;
+  return composeVerticalLineStyle(getLineStroke(style));
+}
 
 const dividerOrnamentOptions: Array<{ value: DividerOrnament; label: string }> = [
   { value: "flower", label: "꽃" },
@@ -755,9 +769,10 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
 
 function normalizeRule(value: Partial<SyntaxRule>): SyntaxRule {
   const legacyLineStyle = String(value.lineStyle ?? "");
-  const normalizedLineStyle = (["none", "vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"] as string[]).includes(String(value.lineStyle))
+  const storedLineStyle = (["none", "vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"] as string[]).includes(String(value.lineStyle))
     ? value.lineStyle as RuleLineStyle
     : legacyLineStyle === "solid" ? "vertical-solid" : legacyLineStyle === "double" ? "vertical-double" : legacyLineStyle === "horizontal-long" ? "horizontal-short" : "none";
+  const normalizedLineStyle = verticalizeLineStyle(storedLineStyle);
   const requestedPresentation = String(value.presentation || "");
   return {
     ...emptyRuleDraft,
@@ -765,7 +780,7 @@ function normalizeRule(value: Partial<SyntaxRule>): SyntaxRule {
     id: value.id || makeId("rule"),
     fontId: normalizeStoredFontId(value.fontId, "inherit"),
     fontScale: clamp(Number(value.fontScale) || 100, 50, 240),
-    highlightColor: value.highlightColor || "transparent",
+    highlightColor: "transparent",
     presentation: (["default", "line", "bubble", "quote"] as string[]).includes(requestedPresentation)
       ? requestedPresentation as RulePresentation
       : normalizedLineStyle !== "none" ? "line" : "default",
@@ -777,8 +792,8 @@ function normalizeRule(value: Partial<SyntaxRule>): SyntaxRule {
 
 function normalizeLineStyle(value: unknown): TextLineStyle {
   const requested = String(value || "none");
-  if (requested === "horizontal-long") return "horizontal-short";
-  return (["none", "vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"] as string[]).includes(requested) ? requested as TextLineStyle : "none";
+  const stored = requested === "horizontal-long" ? "horizontal-short" : (["none", "vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"] as string[]).includes(requested) ? requested as TextLineStyle : "none";
+  return verticalizeLineStyle(stored);
 }
 
 function normalizeDirectMarks(values?: DirectTextMark[]) {
@@ -1085,7 +1100,7 @@ function parseSegments(text: string, rules: SyntaxRule[]): ParsedSegment[] {
 }
 
 function ruleClassNames(rule: SyntaxRule) {
-  const lineClasses = rule.role === "dialogue" ? [] : [`line-${rule.lineStyle}`, `line-position-${rule.linePosition}`];
+  const lineClasses = rule.presentation === "line" || rule.presentation === "quote" || rule.role === "dialogue" ? [] : [`line-${rule.lineStyle}`, `line-position-${rule.linePosition}`];
   return ["styled-segment", `role-${rule.role}`, ...lineClasses, rule.bold ? "is-bold" : "", rule.italic ? "is-italic" : ""].filter(Boolean).join(" ");
 }
 
@@ -1108,7 +1123,6 @@ function ruleStyle(rule: SyntaxRule): CSSProperties {
     color: rule.color,
     fontFamily: getFontFamily(rule.fontId),
     fontSize: `${rule.fontScale / 100}em`,
-    backgroundColor: rule.highlightColor === "transparent" ? undefined : rule.highlightColor,
     "--line-color": rule.lineColor || emptyRuleDraft.lineColor,
   } as CSSProperties;
 }
@@ -1223,23 +1237,24 @@ function PreviewText({ text, rules, mosaicTerms, paragraphIndent = false, direct
     pageBlocks.filter((block) => !renderedBlocks.has(block.id) && block.anchor <= baseOffset + paragraph.start).forEach((block) => { nodes.push(renderFlowBlock(block)); renderedBlocks.add(block.id); });
     if (paragraph.blankLinesBefore > 0) nodes.push(<span className="manual-blank-lines" style={{ height: `${paragraph.blankLinesBefore}lh` }} aria-hidden="true" key={`blank-lines-${baseOffset}-${index}`} />);
     const globalParagraphStart = baseOffset + paragraph.start;
-    const dialogueRule = parseSegments(paragraph.text, rules).find((segment) => segment.rule?.role === "dialogue")?.rule;
+    const parsedParagraph = parseSegments(paragraph.text, rules);
+    const presentationRule = parsedParagraph.find((segment) => segment.rule?.presentation && segment.rule.presentation !== "default")?.rule;
     const paragraphMark = paragraphMarks.find((mark) => mark.start === globalParagraphStart);
     const assignmentKey = `text:${globalParagraphStart}`;
     const dialogueSpeaker = layout?.speakers.find((speaker) => speaker.id === layout.assignments[assignmentKey]);
-    const presentation = paragraphMark?.presentation || (dialogueRule?.presentation !== "default" ? dialogueRule?.presentation : undefined);
-    const dialogueLineStyle = presentation === "line" ? (paragraphMark?.lineStyle || (dialogueRule?.lineStyle === "none" || !dialogueRule?.lineStyle ? "vertical-solid" : dialogueRule.lineStyle)) : "none";
-    const linePosition = paragraphMark?.linePosition || dialogueRule?.linePosition || "below";
+    const presentation = paragraphMark?.presentation || presentationRule?.presentation;
+    const paragraphLineStyle = presentation === "line" || presentation === "quote" ? (paragraphMark?.lineStyle || (presentationRule?.lineStyle === "none" || !presentationRule?.lineStyle ? "vertical-solid" : presentationRule.lineStyle)) : "none";
+    const linePosition = paragraphMark?.linePosition || presentationRule?.linePosition || "below";
     const paragraphClasses = [
       paragraphMark?.role ? `paragraph-role-${paragraphMark.role}` : "",
       presentation ? `paragraph-presentation-${presentation}` : "",
       paragraphMark?.color ? "has-paragraph-color" : "",
       paragraphMark?.bold ? "paragraph-is-bold" : "",
       paragraphMark?.italic ? "paragraph-is-italic" : "",
-      dialogueLineStyle !== "none" ? `has-dialogue-line dialogue-line-${dialogueLineStyle} line-position-${linePosition}` : "",
+      paragraphLineStyle !== "none" ? `has-dialogue-line dialogue-line-${paragraphLineStyle} line-position-${linePosition}` : "",
     ].filter(Boolean).join(" ");
-    const presentationColor = paragraphMark?.presentationColor || dialogueSpeaker?.accentColor || dialogueRule?.lineColor || "#6694ea";
-    const paragraphStyle = paragraphMark || dialogueRule || presentation ? {
+    const presentationColor = paragraphMark?.presentationColor || dialogueSpeaker?.accentColor || presentationRule?.lineColor || "#6694ea";
+    const paragraphStyle = paragraphMark || presentationRule || presentation ? {
       color: paragraphMark?.color,
       "--dialogue-line-color": presentationColor,
       "--paragraph-presentation-color": presentationColor,
@@ -2004,13 +2019,11 @@ export default function QuoteStudio() {
   const [ruleEditorAnchor, setRuleEditorAnchor] = useState<string | "manual" | null>(null);
   const [directStyleDraft, setDirectStyleDraft] = useState<DirectTextStyle>({ ...emptyDirectStyle });
   const [paragraphStyleDraft, setParagraphStyleDraft] = useState({
-    useColor: false,
     color: "#2d2b2a",
     bold: false,
     italic: false,
-    usePresentationColor: false,
     presentationColor: "#6694ea",
-    useLineSettings: false,
+    linePurpose: "emphasis" as LinePurpose,
     lineStyle: "vertical-solid" as ParagraphLineStyle,
     linePosition: "below" as "above" | "below",
   });
@@ -2037,6 +2050,8 @@ export default function QuoteStudio() {
   const [messagePhotoSpeakerId, setMessagePhotoSpeakerId] = useState(defaultSpeakers[0].id);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const editorHighlightRef = useRef<HTMLDivElement>(null);
+  const toolPanelRef = useRef<HTMLElement | null>(null);
+  const pendingRuleScrollAnchorRef = useRef<string | null>(null);
   const exportRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const longExportRef = useRef<HTMLDivElement>(null);
   const canvasWorkbenchRef = useRef<HTMLDivElement>(null);
@@ -2396,6 +2411,23 @@ export default function QuoteStudio() {
   }, [design.canvasHeight]);
 
   useEffect(() => {
+    const anchorId = pendingRuleScrollAnchorRef.current;
+    if (!anchorId || ruleEditorAnchor !== null || activeTool !== "rules") return;
+    pendingRuleScrollAnchorRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      const panel = toolPanelRef.current;
+      if (!panel) return;
+      const candidate = Array.from(panel.querySelectorAll<HTMLElement>("[data-rule-candidate]")).find((element) => element.dataset.ruleCandidate === anchorId);
+      if (!candidate) return;
+      const panelRect = panel.getBoundingClientRect();
+      const stickyBottom = Array.from(panel.querySelectorAll<HTMLElement>(".workflow-panel-bar, .workflow-subtabs")).reduce((bottom, element) => Math.max(bottom, element.getBoundingClientRect().bottom), panelRect.top);
+      const nextScrollTop = panel.scrollTop + candidate.getBoundingClientRect().top - stickyBottom - 8;
+      panel.scrollTop = clamp(nextScrollTop, 0, panel.scrollHeight - panel.clientHeight);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTool, ruleEditorAnchor]);
+
+  useEffect(() => {
     const requestedIds = new Set<FontId>([design.fontId, ...rules.map((rule) => rule.fontId).filter((fontId): fontId is FontId => fontId !== "inherit"), ...directMarks.map((mark) => mark.style.fontId).filter((fontId): fontId is FontId => fontId !== "inherit")]);
     document.querySelectorAll('[id^="quote-font-"]').forEach((element) => {
       const id = element.id.replace("quote-font-", "") as FontId;
@@ -2698,6 +2730,7 @@ export default function QuoteStudio() {
       setRules((current) => [...current, normalizeRule({ ...ruleDraft, id: makeId("rule") })]);
       setToast("사용자 지정 규칙을 추가했습니다.");
     }
+    pendingRuleScrollAnchorRef.current = ruleEditorAnchor && ruleEditorAnchor !== "manual" ? ruleEditorAnchor : null;
     resetRuleEditor();
   }
 
@@ -2745,14 +2778,14 @@ export default function QuoteStudio() {
     setSelectedParagraphStarts((current) => current.includes(start) ? current.filter((value) => value !== start) : [...current, start]);
   }
 
-  function applyParagraphMarkPatch(patch: ParagraphMarkPatch, forceDialogue = false) {
+  function applyParagraphMarkPatch(patch: ParagraphMarkPatch) {
     if (!selectedParagraphStarts.length) return setToast("먼저 문단을 선택하세요.");
     const selected = new Set(selectedParagraphStarts);
     setParagraphMarks((current) => {
       const untouched = current.filter((mark) => !selected.has(mark.start));
       const updated = paragraphReview.filter((paragraph) => selected.has(paragraph.start)).flatMap((paragraph) => {
         const previous = current.find((mark) => mark.start === paragraph.start);
-        const role = forceDialogue ? "dialogue" : patch.role === null ? undefined : patch.role ?? previous?.role;
+        const role = patch.role === null ? undefined : patch.role ?? previous?.role;
         const presentation = patch.presentation === null ? undefined : patch.presentation ?? previous?.presentation;
         const color = "color" in patch ? patch.color || undefined : previous?.color;
         const bold = "bold" in patch ? patch.bold || undefined : previous?.bold;
@@ -2778,18 +2811,30 @@ export default function QuoteStudio() {
       return normalizeParagraphMarks([...untouched, ...updated]).sort((a, b) => a.start - b.start);
     });
     const hasFormatting = ["color", "bold", "italic", "presentationColor", "lineStyle", "linePosition"].some((key) => key in patch);
-    const action = hasFormatting ? "문단 서식" : patch.presentation === "bubble" ? "말풍선" : patch.presentation === "line" ? "대사강조선" : patch.presentation === "quote" ? "인용구" : patch.role === "dialogue" ? "대사" : patch.role === "narration" ? "서술" : patch.role === "thought" ? "속마음" : patch.role === "other" ? "기타" : "기본 표시";
+    const action = hasFormatting ? "문단 서식" : patch.presentation === "bubble" ? "말풍선" : patch.presentation === "line" ? "강조선" : patch.presentation === "quote" ? "인용선" : patch.role === "dialogue" ? "대사" : patch.role === "narration" ? "서술" : patch.role === "thought" ? "속마음" : patch.role === "other" ? "기타" : "기본 표시";
     setToast(`선택한 ${selectedParagraphStarts.length}개 문단을 ${action}로 지정했습니다.`);
   }
 
   function applySelectedParagraphFormatting() {
     applyParagraphMarkPatch({
-      color: paragraphStyleDraft.useColor ? paragraphStyleDraft.color : null,
+      color: paragraphStyleDraft.color,
       bold: paragraphStyleDraft.bold,
       italic: paragraphStyleDraft.italic,
-      presentationColor: paragraphStyleDraft.usePresentationColor ? paragraphStyleDraft.presentationColor : null,
-      lineStyle: paragraphStyleDraft.useLineSettings ? paragraphStyleDraft.lineStyle : null,
-      linePosition: paragraphStyleDraft.useLineSettings ? paragraphStyleDraft.linePosition : null,
+      presentationColor: paragraphStyleDraft.presentationColor,
+      lineStyle: composeVerticalLineStyle(getLineStroke(paragraphStyleDraft.lineStyle)),
+      linePosition: paragraphStyleDraft.linePosition,
+    });
+  }
+
+  function applyParagraphLineDraft(patch: Partial<typeof paragraphStyleDraft> = {}) {
+    const next = { ...paragraphStyleDraft, ...patch };
+    const verticalLineStyle = composeVerticalLineStyle(getLineStroke(next.lineStyle));
+    setParagraphStyleDraft({ ...next, lineStyle: verticalLineStyle });
+    applyParagraphMarkPatch({
+      presentation: next.linePurpose === "quote" ? "quote" : "line",
+      presentationColor: next.presentationColor,
+      lineStyle: verticalLineStyle,
+      linePosition: next.linePosition,
     });
   }
 
@@ -2845,6 +2890,7 @@ export default function QuoteStudio() {
     const end = editor.selectionEnd;
     if (start === end) return setToast("먼저 수정본에서 범위를 선택하세요.");
     const style = { ...directStyleDraft, highlightColor: "transparent", ...(patch || {}) };
+    style.lineStyle = verticalizeLineStyle(style.lineStyle);
     setDirectMarks((current) => [...current, { id: makeId("mark"), start, end, style, kind: "format" }]);
     setToast(style.bubbleSpeakerId ? "선택한 대사를 문단 사이 말풍선으로 지정했습니다." : "선택 영역에 직접 서식을 적용했습니다.");
     window.requestAnimationFrame(() => { editor.focus(); editor.setSelectionRange(start, end); });
@@ -3396,20 +3442,20 @@ export default function QuoteStudio() {
       <div className="rule-builder-heading"><span className="field-label">{editingRuleId ? "규칙 수정" : "새 규칙 만들기"}</span><button onClick={resetRuleEditor}>닫기</button></div>
       <label>규칙 이름<input value={ruleDraft.label} onChange={(event) => setRuleDraft({ ...ruleDraft, label: event.target.value })} /></label>
       <div className="split-fields"><label>시작 문자<input value={ruleDraft.start} onChange={(event) => setRuleDraft({ ...ruleDraft, start: event.target.value })} /></label><label>종료 문자<input value={ruleDraft.end} onChange={(event) => setRuleDraft({ ...ruleDraft, end: event.target.value })} /></label></div>
-      <label>의미<select value={ruleDraft.role} onChange={(event) => { const role = event.target.value as SyntaxRule["role"]; setRuleDraft({ ...ruleDraft, role, presentation: role === "dialogue" ? ruleDraft.presentation : "default", lineStyle: role === "dialogue" ? ruleDraft.lineStyle : "none" }); }}><option value="other">기타·미지정</option><option value="narration">서술</option><option value="dialogue">대사</option><option value="status">상태창</option><option value="emphasis">강조</option></select></label>
+      <label>의미<select value={ruleDraft.role} onChange={(event) => setRuleDraft({ ...ruleDraft, role: event.target.value as SyntaxRule["role"] })}><option value="other">기타·미지정</option><option value="narration">서술</option><option value="dialogue">대사</option><option value="status">상태창</option><option value="emphasis">강조</option></select></label>
       <div className="inline-controls"><label className="color-control">글자색<input type="color" value={ruleDraft.color} onChange={(event) => setRuleDraft({ ...ruleDraft, color: event.target.value })} /></label><label className="check-control"><input type="checkbox" checked={ruleDraft.italic} onChange={(event) => setRuleDraft({ ...ruleDraft, italic: event.target.checked })} />기울임</label><label className="check-control"><input type="checkbox" checked={ruleDraft.bold} onChange={(event) => setRuleDraft({ ...ruleDraft, bold: event.target.checked })} />굵게</label></div>
       <label>구문 글꼴<select value={ruleDraft.fontId} onChange={(event) => setRuleDraft({ ...ruleDraft, fontId: event.target.value as FontId | "inherit" })}><option value="inherit">본문 글꼴 따름</option>{orderedFonts.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label>
       <label className="range-label"><span>구문 글자 크기<b>{ruleDraft.fontScale}%</b></span><input type="range" min="50" max="240" step="5" value={ruleDraft.fontScale} onChange={(event) => setRuleDraft({ ...ruleDraft, fontScale: Number(event.target.value) })} /></label>
-      {ruleDraft.role === "dialogue" && <div className="rule-line-editor">
-        <span className="mini-label">대사 표시</span>
-        <div className="four-way-control paragraph-presentation-control"><button className={ruleDraft.presentation === "default" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "default" })}>기본</button><button className={ruleDraft.presentation === "line" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "line", lineStyle: ruleDraft.lineStyle === "none" ? "vertical-solid" : ruleDraft.lineStyle })}>대사강조선</button><button className={ruleDraft.presentation === "bubble" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "bubble" })}>말풍선</button><button className={ruleDraft.presentation === "quote" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "quote" })}>인용구</button></div>
-        {ruleDraft.presentation !== "default" && <div className="rule-line-fields">
-          {ruleDraft.presentation === "line" ? <label>대사강조선<select value={ruleDraft.lineStyle} onChange={(event) => setRuleDraft({ ...ruleDraft, lineStyle: event.target.value as RuleLineStyle })}>{textLineStyleOptions.filter((option) => option.value !== "none").map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label> : <span className="presentation-color-description">{ruleDraft.presentation === "bubble" ? "말풍선 배경" : "인용구 왼쪽 선"}</span>}
-          <label className="line-color-field">{ruleDraft.presentation === "line" ? "선 색" : "표현 색"}<input type="color" value={ruleDraft.lineColor} onChange={(event) => setRuleDraft({ ...ruleDraft, lineColor: event.target.value })} /></label>
+      <div className="rule-line-editor">
+        <span className="mini-label">표현 방식</span>
+        <div className="three-way-control paragraph-presentation-control"><button className={ruleDraft.presentation === "default" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "default" })}>기본</button><button className={ruleDraft.presentation === "line" || ruleDraft.presentation === "quote" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: ruleDraft.presentation === "quote" ? "quote" : "line", lineStyle: ruleDraft.lineStyle === "none" ? "vertical-solid" : verticalizeLineStyle(ruleDraft.lineStyle) })}>선 표현</button><button className={ruleDraft.presentation === "bubble" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "bubble" })}>말풍선</button></div>
+        {(ruleDraft.presentation === "line" || ruleDraft.presentation === "quote") && <div className="line-composer">
+          <div><span className="mini-label">용도</span><div className="two-way-control"><button className={ruleDraft.presentation === "line" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "line" })}>강조</button><button className={ruleDraft.presentation === "quote" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "quote" })}>인용</button></div></div>
+          <div><span className="mini-label">선 종류</span><div className="four-way-control">{(["solid", "double", "dotted", "dashed"] as LineStroke[]).map((stroke) => <button className={getLineStroke(ruleDraft.lineStyle) === stroke ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, lineStyle: composeVerticalLineStyle(stroke) })} key={stroke}>{stroke === "solid" ? "실선" : stroke === "double" ? "이중선" : stroke === "dotted" ? "점선" : "파선"}</button>)}</div></div>
+          <label className="line-color-field">선 색<input type="color" value={ruleDraft.lineColor} onChange={(event) => setRuleDraft({ ...ruleDraft, lineColor: event.target.value })} /></label>
         </div>}
-        {ruleDraft.presentation === "line" && ruleDraft.lineStyle.startsWith("horizontal") && <div className="line-position-control"><span>선 위치</span><div className="two-way-control"><button className={ruleDraft.linePosition === "above" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, linePosition: "above" })}>구문 위</button><button className={ruleDraft.linePosition === "below" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, linePosition: "below" })}>구문 아래</button></div></div>}
-      </div>}
-      <div className="highlight-control"><span>형광펜</span><input aria-label="형광펜 색" type="color" value={ruleDraft.highlightColor === "transparent" ? "#fff0a8" : ruleDraft.highlightColor} onChange={(event) => setRuleDraft({ ...ruleDraft, highlightColor: event.target.value })} /><button className={ruleDraft.highlightColor !== "transparent" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, highlightColor: ruleDraft.highlightColor === "transparent" ? "#fff0a8" : ruleDraft.highlightColor })}>추가</button><button onClick={() => setRuleDraft({ ...ruleDraft, highlightColor: "transparent" })}>제거</button></div>
+        {ruleDraft.presentation === "bubble" && <div className="rule-line-fields"><span className="presentation-color-description">말풍선 배경</span><label className="line-color-field">배경색<input type="color" value={ruleDraft.lineColor} onChange={(event) => setRuleDraft({ ...ruleDraft, lineColor: event.target.value })} /></label></div>}
+      </div>
       <label className="check-control wide-check"><input type="checkbox" checked={ruleDraft.removeMarkers} onChange={(event) => setRuleDraft({ ...ruleDraft, removeMarkers: event.target.checked })} />미리보기에서 기호 감추기</label>
       <button className="primary-button full-button" onClick={saveRule}>{editingRuleId ? "변경 저장" : "규칙 추가"}</button>
     </div>;
@@ -3436,7 +3482,7 @@ export default function QuoteStudio() {
       <div className="candidate-list">{candidates.length ? candidates.map((candidate) => {
         const assigned = assignedSignatures.has(`${candidate.start}::${candidate.end}`);
         const editorOpen = ruleEditorAnchor === candidate.id;
-        return <div className={`candidate-entry ${editorOpen ? "is-open" : ""}`} key={candidate.id}>
+        return <div className={`candidate-entry ${editorOpen ? "is-open" : ""}`} data-rule-candidate={candidate.id} key={candidate.id}>
           <button className={`candidate-item ${assigned ? "is-assigned" : ""} ${editorOpen ? "is-open" : ""}`} aria-expanded={editorOpen} onClick={() => selectCandidate(candidate)}><span className="candidate-symbol">{candidate.start}</span><span><b>{candidate.name}</b><small>{candidate.count}개 · {assigned ? "지정됨" : "미지정"}</small></span><span className="candidate-action">{editorOpen ? "−" : assigned ? "✓" : "+"}</span></button>
           {editorOpen && renderRuleBuilder("candidate-rule-builder")}
         </div>;
@@ -3452,7 +3498,7 @@ export default function QuoteStudio() {
         <div className="paragraph-review-list">{paragraphReview.length ? paragraphReview.map((paragraph, index) => {
           const selected = selectedParagraphStarts.includes(paragraph.start);
           const roleLabel = paragraph.resolvedRole === "dialogue" ? "대사" : paragraph.resolvedRole === "narration" ? "서술" : paragraph.resolvedRole === "thought" ? "속마음" : "미지정";
-          const presentationLabel = paragraph.resolvedPresentation === "bubble" ? "말풍선" : paragraph.resolvedPresentation === "line" ? "대사강조선" : paragraph.resolvedPresentation === "quote" ? "인용구" : "기본 표시";
+          const presentationLabel = paragraph.resolvedPresentation === "bubble" ? "말풍선" : paragraph.resolvedPresentation === "line" ? "강조선" : paragraph.resolvedPresentation === "quote" ? "인용선" : "기본 표시";
           return <div className={`paragraph-review-item ${selected ? "is-selected" : ""}`} key={`${paragraph.start}-${index}`}>
             <button className="paragraph-check" aria-pressed={selected} aria-label={`${index + 1}번째 문단 ${selected ? "선택 해제" : "복수 선택"}`} title="여러 문단을 함께 선택할 수 있습니다" onClick={() => toggleParagraphSelection(paragraph.start)}><span>{selected ? "✓" : index + 1}</span></button>
             <button className="paragraph-review-copy" onClick={() => focusParagraph(paragraph.start, paragraph.end)}><span>{paragraph.text.slice(0, 90)}{paragraph.text.length > 90 ? "…" : ""}</span><small>{roleLabel} · {presentationLabel}{paragraph.mark ? " · 직접 지정" : paragraph.detectedRule ? ` · ${paragraph.detectedRule.label}` : ""}</small></button>
@@ -3460,25 +3506,23 @@ export default function QuoteStudio() {
         }) : <div className="empty-state">수정본에 확인할 문단이 없습니다.</div>}</div>
         <div className="paragraph-batch-editor">
           <span className="mini-label">문장 종류</span><div className="four-way-control"><button onClick={() => applyParagraphMarkPatch({ role: "dialogue" })}>대사</button><button onClick={() => applyParagraphMarkPatch({ role: "narration" })}>서술</button><button onClick={() => applyParagraphMarkPatch({ role: "thought" })}>속마음</button><button onClick={() => applyParagraphMarkPatch({ role: "other" })}>기타</button></div>
-          <span className="mini-label">표현 방식</span><div className="four-way-control paragraph-presentation-control"><button onClick={() => applyParagraphMarkPatch({ presentation: null })}>기본</button><button onClick={() => applyParagraphMarkPatch({ presentation: "line" }, true)}>대사강조선</button><button onClick={() => applyParagraphMarkPatch({ presentation: "bubble" }, true)}>말풍선</button><button onClick={() => applyParagraphMarkPatch({ presentation: "quote" })}>인용구</button></div>
+          <span className="mini-label">표현 방식</span><div className="three-way-control paragraph-presentation-control"><button onClick={() => applyParagraphMarkPatch({ presentation: null })}>기본</button><button onClick={() => applyParagraphLineDraft()}>선 표현</button><button onClick={() => applyParagraphMarkPatch({ presentation: "bubble", presentationColor: paragraphStyleDraft.presentationColor })}>말풍선</button></div>
           <div className="paragraph-format-editor">
             <span className="mini-label">문단 서식</span>
-            <div className="paragraph-format-row">
-              <label className="color-control">글자색<input type="color" disabled={!paragraphStyleDraft.useColor} value={paragraphStyleDraft.color} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, color: event.target.value, useColor: true }))} /></label>
-              <label className="check-control paragraph-inherit-color"><input type="checkbox" checked={!paragraphStyleDraft.useColor} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, useColor: !event.target.checked }))} />본문색 따름</label>
-            </div>
+            <label className="color-control">글자색<input type="color" value={paragraphStyleDraft.color} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, color: event.target.value }))} /></label>
             <div className="inline-controls paragraph-emphasis-controls"><label className="check-control"><input type="checkbox" checked={paragraphStyleDraft.bold} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, bold: event.target.checked }))} />굵게</label><label className="check-control"><input type="checkbox" checked={paragraphStyleDraft.italic} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, italic: event.target.checked }))} />기울임</label></div>
-            <div className="paragraph-format-row"><label className="color-control">표현 색<input aria-label="문단 표현 색" type="color" disabled={!paragraphStyleDraft.usePresentationColor} value={paragraphStyleDraft.presentationColor} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, presentationColor: event.target.value, usePresentationColor: true }))} /></label><label className="check-control paragraph-inherit-color"><input type="checkbox" checked={!paragraphStyleDraft.usePresentationColor} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, usePresentationColor: !event.target.checked }))} />기본색 따름</label></div>
-            <p className="paragraph-priority-note">형광펜이 최우선이며, 그다음은 선택 문단의 직접 지정 서식입니다.</p>
-            <label className="check-control wide-check"><input type="checkbox" checked={paragraphStyleDraft.useLineSettings} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, useLineSettings: event.target.checked }))} />대사강조선 모양 직접 지정</label>
-            <div className="rule-line-fields"><label>대사강조선<select disabled={!paragraphStyleDraft.useLineSettings} value={paragraphStyleDraft.lineStyle} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, lineStyle: event.target.value as ParagraphLineStyle }))}>{textLineStyleOptions.filter((option) => option.value !== "none").map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><div className="line-position-control compact-line-position"><span>가로선 위치</span><div className="two-way-control"><button disabled={!paragraphStyleDraft.useLineSettings} className={paragraphStyleDraft.linePosition === "above" ? "is-selected" : ""} onClick={() => setParagraphStyleDraft((current) => ({ ...current, linePosition: "above" }))}>위</button><button disabled={!paragraphStyleDraft.useLineSettings} className={paragraphStyleDraft.linePosition === "below" ? "is-selected" : ""} onClick={() => setParagraphStyleDraft((current) => ({ ...current, linePosition: "below" }))}>아래</button></div></div></div>
+            <label className="color-control">표현 색<input aria-label="문단 표현 색" type="color" value={paragraphStyleDraft.presentationColor} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, presentationColor: event.target.value }))} /></label>
+            <div className="line-composer">
+              <div><span className="mini-label">용도</span><div className="two-way-control"><button className={paragraphStyleDraft.linePurpose === "emphasis" ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ linePurpose: "emphasis" })}>강조</button><button className={paragraphStyleDraft.linePurpose === "quote" ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ linePurpose: "quote" })}>인용</button></div></div>
+              <div><span className="mini-label">선 종류</span><div className="four-way-control">{(["solid", "double", "dotted", "dashed"] as LineStroke[]).map((stroke) => <button className={getLineStroke(paragraphStyleDraft.lineStyle) === stroke ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ lineStyle: composeVerticalLineStyle(stroke) })} key={stroke}>{stroke === "solid" ? "실선" : stroke === "double" ? "이중선" : stroke === "dotted" ? "점선" : "파선"}</button>)}</div></div>
+            </div>
             <button className="primary-button full-button" onClick={applySelectedParagraphFormatting}>선택 문단에 서식 적용</button>
           </div>
           <button className="secondary-button full-button" onClick={clearSelectedParagraphMarks}>직접 지정 해제 · 구문 규칙 따름</button>
         </div>
       </div>
       {rules.length > 0 && <div className="rule-list">{rules.map((rule) => <div className={`rule-chip ${editingRuleId === rule.id ? "is-editing" : ""}`} key={rule.id}><span className="rule-dot" style={{ background: rule.color }} /><span><b>{rule.label}</b><small>{rule.start} … {rule.end}</small></span><div className="rule-actions"><button aria-label={`${rule.label} 규칙 수정`} onClick={() => beginEditRule(rule)}>수정</button><button aria-label={`${rule.label} 규칙 삭제`} onClick={() => deleteRule(rule.id)}>×</button></div></div>)}</div>}
-      {["bubble", "messenger"].includes(layout.mode) && <div className="control-card dialogue-character-card"><div className="history-heading"><span className="field-label">메신저 화자 구분</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 캐릭터 추가</button></div><p className="helper-note">말풍선·메신저 템플릿에서만 화자와 좌우 방향을 사용합니다. 일반 레이아웃의 문단 말풍선에는 이름이 표시되지 않습니다.</p><label className="check-control wide-check"><input type="checkbox" checked={layout.dialogueShowNames} onChange={(event) => setLayout((current) => ({ ...current, dialogueShowNames: event.target.checked }))} />캔버스에 캐릭터명 표시</label><div className="dialogue-character-list">{layout.speakers.map((speaker) => <div className="dialogue-character-editor" key={speaker.id}><input aria-label="대사 캐릭터명" value={speaker.name} onChange={(event) => updateSpeaker(speaker.id, { name: event.target.value })} placeholder="위해" /><input aria-label={`${speaker.name} 대사강조선 색`} title="대사강조선 색" type="color" value={speaker.accentColor} onChange={(event) => updateSpeaker(speaker.id, { accentColor: event.target.value })} /><button aria-label={`${speaker.name} 캐릭터 삭제`} disabled={layout.speakers.length <= 1} onClick={() => removeSpeaker(speaker.id)}>삭제</button></div>)}</div>{dialogueParagraphs.length ? <div className="dialogue-assignment-list">{dialogueParagraphs.map((paragraph) => { const key = `text:${paragraph.start}`; return <label key={key}><span>{paragraph.text.slice(0, 46)}{paragraph.text.length > 46 ? "…" : ""}</span><select value={layout.assignments[key] || ""} onChange={(event) => setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: event.target.value } }))}><option value="">미지정</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name}</option>)}</select></label>; })}</div> : <div className="empty-state">의미가 ‘대사’인 구문 규칙을 만들면 문단별 지정 항목이 나타납니다.</div>}</div>}
+      {["bubble", "messenger"].includes(layout.mode) && <div className="control-card dialogue-character-card"><div className="history-heading"><span className="field-label">메신저 화자 구분</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 캐릭터 추가</button></div><p className="helper-note">말풍선·메신저 템플릿에서만 화자와 좌우 방향을 사용합니다. 일반 레이아웃의 문단 말풍선에는 이름이 표시되지 않습니다.</p><label className="check-control wide-check"><input type="checkbox" checked={layout.dialogueShowNames} onChange={(event) => setLayout((current) => ({ ...current, dialogueShowNames: event.target.checked }))} />캔버스에 캐릭터명 표시</label><div className="dialogue-character-list">{layout.speakers.map((speaker) => <div className="dialogue-character-editor" key={speaker.id}><input aria-label="대사 캐릭터명" value={speaker.name} onChange={(event) => updateSpeaker(speaker.id, { name: event.target.value })} placeholder="위해" /><input aria-label={`${speaker.name} 강조선 색`} title="강조선 색" type="color" value={speaker.accentColor} onChange={(event) => updateSpeaker(speaker.id, { accentColor: event.target.value })} /><button aria-label={`${speaker.name} 캐릭터 삭제`} disabled={layout.speakers.length <= 1} onClick={() => removeSpeaker(speaker.id)}>삭제</button></div>)}</div>{dialogueParagraphs.length ? <div className="dialogue-assignment-list">{dialogueParagraphs.map((paragraph) => { const key = `text:${paragraph.start}`; return <label key={key}><span>{paragraph.text.slice(0, 46)}{paragraph.text.length > 46 ? "…" : ""}</span><select value={layout.assignments[key] || ""} onChange={(event) => setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: event.target.value } }))}><option value="">미지정</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name}</option>)}</select></label>; })}</div> : <div className="empty-state">의미가 ‘대사’인 구문 규칙을 만들면 문단별 지정 항목이 나타납니다.</div>}</div>}
     </div>;
 
     if (activeTool === "edit") return <div className="tool-content">
@@ -3493,7 +3537,7 @@ export default function QuoteStudio() {
         <label>글꼴<select value={directStyleDraft.fontId} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontId: event.target.value as FontId | "inherit" }))}><option value="inherit">본문 글꼴 따름</option>{orderedFonts.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label>
         <label className="range-label"><span>선택 글자 크기<b>{directStyleDraft.fontScale}%</b></span><input type="range" min="50" max="240" step="5" value={directStyleDraft.fontScale} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontScale: Number(event.target.value) }))} /></label>
         <div className="inline-controls"><label className="check-control"><input type="checkbox" checked={directStyleDraft.bold} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, bold: event.target.checked }))} />굵게</label><label className="check-control"><input type="checkbox" checked={directStyleDraft.italic} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, italic: event.target.checked }))} />기울임</label></div>
-        <div className="rule-line-editor direct-line-editor"><div className="rule-line-fields"><label>선과 구분<select value={directStyleDraft.lineStyle} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineStyle: event.target.value as TextLineStyle }))}>{textLineStyleOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><label className="line-color-field">선 색<input type="color" value={directStyleDraft.lineColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label></div>{directStyleDraft.lineStyle.startsWith("horizontal") && <div className="line-position-control"><span>선 위치</span><div className="two-way-control"><button className={directStyleDraft.linePosition === "above" ? "is-selected" : ""} onClick={() => setDirectStyleDraft((current) => ({ ...current, linePosition: "above" }))}>선택 영역 위</button><button className={directStyleDraft.linePosition === "below" ? "is-selected" : ""} onClick={() => setDirectStyleDraft((current) => ({ ...current, linePosition: "below" }))}>선택 영역 아래</button></div></div>}</div>
+        <div className="rule-line-editor direct-line-editor"><div className="rule-line-fields"><label>선과 구분<select value={verticalizeLineStyle(directStyleDraft.lineStyle)} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineStyle: event.target.value as TextLineStyle }))}>{textLineStyleOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><label className="line-color-field">선 색<input type="color" value={directStyleDraft.lineColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label></div></div>
         <button className="primary-button full-button" onClick={() => applyDirectStyle()}>선택 영역에 적용</button>
       </div>
       <div className="control-card attribution-control">
@@ -3741,7 +3785,7 @@ export default function QuoteStudio() {
           {toolItems.map((tool, index) => { const selected = tool.tools.includes(activeTool); return <button className={`workflow-step-button ${selected ? "is-active" : ""}`} aria-label={`${index + 1}단계 ${tool.label}`} aria-current={selected ? "step" : undefined} title={tool.description} data-last={index === toolItems.length - 1} onClick={() => { setActiveTool(tool.primaryTool); setLeftCollapsed(false); }} key={tool.id}><span className="workflow-step-index">{index + 1}</span><small>{tool.label}</small></button>; })}
           <button className="rail-collapse" aria-label={leftCollapsed ? "과정 패널 펼치기" : "과정 패널 접기"} onClick={() => setLeftCollapsed((value) => !value)}>{leftCollapsed ? "›" : "‹"}</button>
         </nav>
-        <section className="tool-panel">
+        <section ref={toolPanelRef} className="tool-panel">
           <div className="workflow-panel-bar"><div><span>STEP {String(activeToolIndex + 1).padStart(2, "0")} / {String(toolItems.length).padStart(2, "0")}</span><b>{activeToolItem.label}</b><small>{activeToolItem.description}</small></div><div className="workflow-panel-actions"><button disabled={activeToolIndex === 0} aria-label="이전 단계" onClick={() => setActiveTool(toolItems[Math.max(0, activeToolIndex - 1)].primaryTool)}>←</button><button disabled={activeToolIndex === toolItems.length - 1} onClick={() => setActiveTool(toolItems[Math.min(toolItems.length - 1, activeToolIndex + 1)].primaryTool)}>다음 →</button></div></div>
           {activeToolItem.id === "content" && <nav className="workflow-subtabs" aria-label="내용 정리 도구">{contentToolItems.map((item) => <button className={activeTool === item.id ? "is-active" : ""} onClick={() => setActiveTool(item.id)} key={item.id}>{item.label}</button>)}</nav>}
           {renderToolPanel()}
