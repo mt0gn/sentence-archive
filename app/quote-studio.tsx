@@ -40,6 +40,7 @@ type FontId =
   | "gowun-dodum";
 type TextAlign = "left" | "center" | "right" | "justify";
 type VerticalAlign = "top" | "center" | "bottom";
+type AttributionBarPosition = "between" | "leading";
 type SpeakerSide = "left" | "right";
 type ExportFormat = "png" | "jpeg" | "webp";
 type SurfaceSize = "standard" | "banner";
@@ -49,7 +50,6 @@ type ImageFit = "cover" | "contain" | "stretch";
 type TextLineStyle = "none" | "vertical-solid" | "vertical-double" | "vertical-dotted" | "vertical-dashed" | "horizontal-short" | "horizontal-double" | "horizontal-dotted" | "horizontal-dashed";
 type RuleLineStyle = TextLineStyle;
 type RulePresentation = "default" | ParagraphPresentation;
-type LinePurpose = "emphasis" | "quote";
 type LineStroke = "solid" | "double" | "dotted" | "dashed";
 type ParagraphMarkPatch = {
   role?: ParagraphRole | null;
@@ -58,6 +58,7 @@ type ParagraphMarkPatch = {
   bold?: boolean | null;
   italic?: boolean | null;
   presentationColor?: string | null;
+  bubbleSide?: SpeakerSide | null;
   lineStyle?: ParagraphLineStyle | null;
   linePosition?: "above" | "below" | null;
 };
@@ -108,6 +109,7 @@ type SyntaxRule = {
   fontScale: number;
   highlightColor: string;
   presentation: RulePresentation;
+  bubbleSide: SpeakerSide;
   lineStyle: RuleLineStyle;
   linePosition: "above" | "below";
   lineColor: string;
@@ -360,12 +362,9 @@ type LayoutSettings = {
   attributionVisible: boolean;
   attributionCharacter: string;
   attributionCreator: string;
-  attributionPlatform: string;
+  attributionBarPosition: AttributionBarPosition;
   attributionX: number;
   attributionY: number;
-  attributionGap: number;
-  attributionOffsetVersion: 2;
-  attributionPlatformOffsetY: number;
   mosaicExclusions: MosaicExclusion[];
   dialogueShowNames: boolean;
   headerKicker: string;
@@ -507,7 +506,7 @@ const dividerOrnamentOptions: Array<{ value: DividerOrnament; label: string }> =
 const UI_ACCENT = "#6694EA";
 const publicAsset = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`;
 const outputColorPresets = ["#f4f1ea", "#ffffff", "#171719", "#dfe6ee", "#eadfe4", "#dfe9df", "#e9e0cf", "#343841"];
-const emptyRuleDraft: Omit<SyntaxRule, "id"> = { label: "새 규칙", start: "", end: "", role: "other", color: "#5e5e66", bold: false, italic: false, removeMarkers: false, fontId: "inherit", fontScale: 100, highlightColor: "transparent", presentation: "default", lineStyle: "none", linePosition: "below", lineColor: "#6694ea" };
+const emptyRuleDraft: Omit<SyntaxRule, "id"> = { label: "새 규칙", start: "", end: "", role: "other", color: "#5e5e66", bold: false, italic: false, removeMarkers: false, fontId: "inherit", fontScale: 100, highlightColor: "transparent", presentation: "default", bubbleSide: "left", lineStyle: "none", linePosition: "below", lineColor: "#6694ea" };
 const emptyDirectStyle: DirectTextStyle = { bold: false, italic: false, color: "#2d2b2a", highlightColor: "transparent", fontId: "inherit", fontScale: 100, lineStyle: "none", linePosition: "below", lineColor: "#6694ea", bubbleSpeakerId: "", time: "", readStatus: "" };
 const fontOptions: Array<{ id: FontId; label: string; family: string; category: "고딕" | "명조" | "기타"; weight: string; manuscriptOffsetEm?: number; cssUrl?: string; fileUrl?: string; format?: string }> = [
   { id: "pretendard", label: "프리텐다드", family: '"Pretendard", sans-serif', category: "고딕", weight: "45 920", fileUrl: publicAsset("/fonts/PretendardVariable.woff2") },
@@ -596,7 +595,7 @@ const defaultDesign: DesignSettings = {
 };
 
 const defaultSpeakers: Speaker[] = [
-  { id: "speaker-character", name: "위해", side: "left", color: "#ffffff", textColor: "#171719", accentColor: "#788ee0", avatar: null },
+  { id: "speaker-character", name: "위해", side: "left", color: "#f3f6fc", textColor: "#171719", accentColor: "#788ee0", avatar: null },
   { id: "speaker-user", name: "wesea", side: "right", color: "#8caae9", textColor: "#171719", accentColor: "#6694ea", avatar: null },
 ];
 
@@ -614,10 +613,10 @@ const defaultLayout: LayoutSettings = {
   showSpeakerNames: true,
   showTime: false,
   showReadStatus: false,
-  bubbleMaxWidth: 72,
+  bubbleMaxWidth: 68,
   bubbleRadius: 16,
   bubblePaddingX: 12,
-  bubblePaddingY: 9,
+  bubblePaddingY: 10,
   messageGap: 10,
   messengerStyle: "kakao",
   dmTheme: "light",
@@ -686,12 +685,9 @@ const defaultLayout: LayoutSettings = {
   attributionVisible: false,
   attributionCharacter: "",
   attributionCreator: "",
-  attributionPlatform: "",
+  attributionBarPosition: "between",
   attributionX: 50,
   attributionY: 84,
-  attributionGap: 0,
-  attributionOffsetVersion: 2,
-  attributionPlatformOffsetY: 12,
   mosaicExclusions: [],
   dialogueShowNames: false,
   headerKicker: "QUOTE",
@@ -702,6 +698,16 @@ const defaultLayout: LayoutSettings = {
 };
 
 function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial<DesignSettings> | Record<string, unknown>): LayoutSettings {
+  const sanitizedValue = { ...(value || {}) } as Partial<LayoutSettings> & {
+    attributionPlatform?: unknown;
+    attributionGap?: unknown;
+    attributionOffsetVersion?: unknown;
+    attributionPlatformOffsetY?: unknown;
+  };
+  delete sanitizedValue.attributionPlatform;
+  delete sanitizedValue.attributionGap;
+  delete sanitizedValue.attributionOffsetVersion;
+  delete sanitizedValue.attributionPlatformOffsetY;
   const legacyBackground = String(legacyDesign?.backgroundMode || "");
   const legacyMode = value?.mode || defaultLayout.mode;
   const mode = legacyMode === "scrapbook" || legacyMode === "booklet"
@@ -715,7 +721,7 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
       : defaultLayout.mode;
   return {
     ...defaultLayout,
-    ...(value || {}),
+    ...sanitizedValue,
     mode,
     messengerStyle: legacyMode === "dm" ? "dm" : legacyMode === "kakao" ? "kakao" : value?.messengerStyle === "dm" ? "dm" : "kakao",
     manuscriptMode: value?.manuscriptMode === "vertical" || value?.manuscriptTemplate === "vertical" ? "vertical" : "horizontal",
@@ -740,12 +746,9 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
     attributionVisible: Boolean(value?.attributionVisible),
     attributionCharacter: String(value?.attributionCharacter || ""),
     attributionCreator: String(value?.attributionCreator || value?.attributionAuthor || ""),
-    attributionPlatform: String(value?.attributionPlatform || ""),
+    attributionBarPosition: value?.attributionBarPosition === "leading" ? "leading" : "between",
     attributionX: clamp(Number(value?.attributionX ?? defaultLayout.attributionX), 0, 100),
     attributionY: clamp(Number(value?.attributionY ?? defaultLayout.attributionY), 0, 100),
-    attributionGap: value?.attributionOffsetVersion === 2 ? clamp(Number(value?.attributionGap ?? defaultLayout.attributionGap), -400, 400) : 0,
-    attributionOffsetVersion: 2,
-    attributionPlatformOffsetY: clamp(Number(value?.attributionPlatformOffsetY ?? defaultLayout.attributionPlatformOffsetY), 0, 100),
     mosaicExclusions: (value?.mosaicExclusions || []).filter((item) => item && typeof item.term === "string" && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start).map((item) => ({ id: item.id || makeId("mosaic-exclusion"), term: item.term, start: Math.max(0, Number(item.start)), end: Math.max(0, Number(item.end)) })),
     dialogueShowNames: Boolean(value?.dialogueShowNames),
     headerKicker: String(value?.headerKicker ?? defaultLayout.headerKicker),
@@ -781,9 +784,12 @@ function normalizeRule(value: Partial<SyntaxRule>): SyntaxRule {
     fontId: normalizeStoredFontId(value.fontId, "inherit"),
     fontScale: clamp(Number(value.fontScale) || 100, 50, 240),
     highlightColor: "transparent",
-    presentation: (["default", "line", "bubble", "quote"] as string[]).includes(requestedPresentation)
+    presentation: requestedPresentation === "quote"
+      ? "line"
+      : (["default", "line", "bubble"] as string[]).includes(requestedPresentation)
       ? requestedPresentation as RulePresentation
       : normalizedLineStyle !== "none" ? "line" : "default",
+    bubbleSide: value.bubbleSide === "right" ? "right" : "left",
     lineStyle: normalizedLineStyle,
     linePosition: value.linePosition === "above" ? "above" : "below",
     lineColor: value.lineColor || emptyRuleDraft.lineColor,
@@ -836,6 +842,7 @@ function ruleToDraft(value: Partial<SyntaxRule>): Omit<SyntaxRule, "id"> {
     fontScale: rule.fontScale,
     highlightColor: rule.highlightColor,
     presentation: rule.presentation,
+    bubbleSide: rule.bubbleSide,
     lineStyle: rule.lineStyle,
     linePosition: rule.linePosition,
     lineColor: rule.lineColor,
@@ -1100,7 +1107,7 @@ function parseSegments(text: string, rules: SyntaxRule[]): ParsedSegment[] {
 }
 
 function ruleClassNames(rule: SyntaxRule) {
-  const lineClasses = rule.presentation === "line" || rule.presentation === "quote" || rule.role === "dialogue" ? [] : [`line-${rule.lineStyle}`, `line-position-${rule.linePosition}`];
+  const lineClasses = rule.presentation === "line" || rule.role === "dialogue" ? [] : [`line-${rule.lineStyle}`, `line-position-${rule.linePosition}`];
   return ["styled-segment", `role-${rule.role}`, ...lineClasses, rule.bold ? "is-bold" : "", rule.italic ? "is-italic" : ""].filter(Boolean).join(" ");
 }
 
@@ -1243,19 +1250,22 @@ function PreviewText({ text, rules, mosaicTerms, paragraphIndent = false, direct
     const assignmentKey = `text:${globalParagraphStart}`;
     const dialogueSpeaker = layout?.speakers.find((speaker) => speaker.id === layout.assignments[assignmentKey]);
     const presentation = paragraphMark?.presentation || presentationRule?.presentation;
-    const paragraphLineStyle = presentation === "line" || presentation === "quote" ? (paragraphMark?.lineStyle || (presentationRule?.lineStyle === "none" || !presentationRule?.lineStyle ? "vertical-solid" : presentationRule.lineStyle)) : "none";
-    const linePosition = paragraphMark?.linePosition || presentationRule?.linePosition || "below";
+    const bubbleSide = paragraphMark?.bubbleSide || presentationRule?.bubbleSide || "left";
+    const standaloneParagraphBubble = presentation === "bubble" && layout?.mode !== "bubble";
+    const paragraphLineStyle = presentation === "line" ? (paragraphMark?.lineStyle || (presentationRule?.lineStyle === "none" || !presentationRule?.lineStyle ? "vertical-solid" : presentationRule.lineStyle)) : "none";
     const paragraphClasses = [
       paragraphMark?.role ? `paragraph-role-${paragraphMark.role}` : "",
       presentation ? `paragraph-presentation-${presentation}` : "",
+      standaloneParagraphBubble ? `paragraph-bubble-inline paragraph-bubble-side-${bubbleSide}` : "",
       paragraphMark?.color ? "has-paragraph-color" : "",
       paragraphMark?.bold ? "paragraph-is-bold" : "",
       paragraphMark?.italic ? "paragraph-is-italic" : "",
-      paragraphLineStyle !== "none" ? `has-dialogue-line dialogue-line-${paragraphLineStyle} line-position-${linePosition}` : "",
+      paragraphLineStyle !== "none" ? `has-dialogue-line dialogue-line-${paragraphLineStyle}` : "",
     ].filter(Boolean).join(" ");
-    const presentationColor = paragraphMark?.presentationColor || dialogueSpeaker?.accentColor || presentationRule?.lineColor || "#6694ea";
+    const presentationColor = paragraphMark?.presentationColor || presentationRule?.lineColor || dialogueSpeaker?.accentColor || "#6694ea";
     const paragraphStyle = paragraphMark || presentationRule || presentation ? {
       color: paragraphMark?.color,
+      backgroundColor: presentation === "bubble" ? presentationColor : undefined,
       "--dialogue-line-color": presentationColor,
       "--paragraph-presentation-color": presentationColor,
     } as CSSProperties : undefined;
@@ -1718,6 +1728,21 @@ function replaceSelectedOccurrences(text: string, from: string, to: string, excl
   return { text: output, count };
 }
 
+const NARRATION_ASSIGNMENT = "__narration__";
+
+function isDoubleQuotedParagraph(text: string) {
+  const trimmed = text.trim();
+  return (/^"[\s\S]+"$/).test(trimmed) || (/^“[\s\S]+”$/).test(trimmed);
+}
+
+function resolveMessageSpeakerId(layout: LayoutSettings, text: string, globalKey: string, localKey: string) {
+  const explicit = layout.assignments[globalKey] || layout.assignments[localKey];
+  if (explicit === NARRATION_ASSIGNMENT) return "";
+  if (explicit) return explicit;
+  if (layout.mode === "bubble" && isDoubleQuotedParagraph(text)) return layout.speakers[0]?.id || "";
+  return "";
+}
+
 function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], flowBlocks = [] }: { page: PageItem; rules: SyntaxRule[]; mosaicTerms: string[]; layout: LayoutSettings; directMarks?: DirectTextMark[]; flowBlocks?: FlowBlock[] }) {
   const paragraphs = splitParagraphsWithOffsets(page.text);
   const pageBlocks = flowBlocks.filter((block) => block.anchor >= page.startOffset && block.anchor <= page.startOffset + page.text.length).sort((a, b) => a.anchor - b.anchor);
@@ -1729,12 +1754,12 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
     const metaNode = ((layout.showTime && block.time) || (layout.showReadStatus && block.readStatus)) ? <small className="message-meta">{layout.showReadStatus && block.readStatus && <span>{block.readStatus}</span>}{layout.showTime && block.time && <span>{formatMessageTime(block.time)}</span>}</small> : null;
     const fixedBubbleColor = layout.mode === "messenger" && layout.messengerStyle === "kakao" ? (speaker.side === "right" ? "#fee500" : "#ffffff") : layout.mode === "messenger" && layout.messengerStyle === "dm" ? (speaker.side === "right" ? "#a855d4" : layout.dmTheme === "dark" ? "#26262b" : "#ffffff") : speaker.color;
     return <div className={`message-row side-${speaker.side} is-photo-only`} key={block.id}>
-      {layout.showAvatars && speaker.side === "left" && <div className="message-avatar">{speaker.avatar ? <img src={speaker.avatar} alt="" /> : speaker.name.slice(0, 1)}</div>}
+      {layout.showAvatars && speaker.side === "left" && <div className="message-avatar" style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1)}</div>}
       <div className="message-stack">
-        {layout.showSpeakerNames && (speaker.side === "left" || layout.mode === "bubble") && <span className="message-speaker">{speaker.name}</span>}
-        <div className="message-line">{speaker.side === "right" && metaNode}<div className={`message-bubble photo-only-bubble ${layout.showTails ? "with-tail" : ""}`} style={{ "--bubble-color": fixedBubbleColor } as CSSProperties}><figure className="flow-image placement-flow"><img src={block.src} alt="사진 메시지" draggable={false} /></figure></div>{speaker.side === "left" && metaNode}</div>
+        {layout.showSpeakerNames && (speaker.side === "left" || layout.mode === "bubble") && <span className="message-speaker" style={layout.mode === "bubble" ? { color: speaker.accentColor } : undefined}>{speaker.name}</span>}
+        <div className={`message-line ${layout.showTails ? "has-protruding-tail" : ""}`}>{speaker.side === "right" && metaNode}<div className={`message-bubble photo-only-bubble ${layout.showTails ? "with-tail" : ""}`} style={{ "--bubble-color": fixedBubbleColor } as CSSProperties}><figure className="flow-image placement-flow"><img src={block.src} alt="사진 메시지" draggable={false} /></figure></div>{speaker.side === "left" && metaNode}</div>
       </div>
-      {layout.showAvatars && speaker.side === "right" && <div className="message-avatar">{speaker.avatar ? <img src={speaker.avatar} alt="" /> : speaker.name.slice(0, 1)}</div>}
+      {layout.showAvatars && speaker.side === "right" && <div className="message-avatar" style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1)}</div>}
     </div>;
   };
   const nodes = paragraphs.flatMap((paragraph, index) => {
@@ -1742,14 +1767,14 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
     dueBlocks.forEach((block) => renderedBlocks.add(block.id));
     const assignmentKey = `${page.id}:${index}`;
     const globalAssignmentKey = `text:${page.startOffset + paragraph.start}`;
-    const speaker = layout.speakers.find((item) => item.id === (layout.assignments[globalAssignmentKey] || layout.assignments[assignmentKey]));
+    const speaker = layout.speakers.find((item) => item.id === resolveMessageSpeakerId(layout, paragraph.text, globalAssignmentKey, assignmentKey));
     const photoMessages = dueBlocks.filter((block) => block.type === "image" && block.photoOnly).map(renderPhotoMessage);
     const attachedImages = speaker ? dueBlocks.filter((block) => block.type === "image" && !block.photoOnly) : [];
     const before = dueBlocks.filter((block) => !block.photoOnly && (!speaker || block.type !== "image")).map(renderFlowBlock);
     if (!speaker) return [...photoMessages, ...before, <div className="message-narration" key={assignmentKey}>{renderInline(paragraph.text, rules, mosaicTerms, assignmentKey, directMarks, page.startOffset + paragraph.start, layout)}</div>];
     const previousParagraph = paragraphs[index - 1];
     const previousGlobalKey = previousParagraph ? `text:${page.startOffset + previousParagraph.start}` : "";
-    const previous = index > 0 ? layout.speakers.find((item) => item.id === (layout.assignments[previousGlobalKey] || layout.assignments[`${page.id}:${index - 1}`])) : null;
+    const previous = index > 0 && previousParagraph ? layout.speakers.find((item) => item.id === resolveMessageSpeakerId(layout, previousParagraph.text, previousGlobalKey, `${page.id}:${index - 1}`)) : null;
     const hideAvatar = layout.compactAvatars && previous?.id === speaker.id;
     const meta = layout.messageMeta[assignmentKey] || { time: "", readStatus: "" };
     const metaNode = ((layout.showTime && meta.time) || (layout.showReadStatus && meta.readStatus)) ? <small className="message-meta">{layout.showReadStatus && meta.readStatus && <span>{meta.readStatus}</span>}{layout.showTime && meta.time && <span>{formatMessageTime(meta.time)}</span>}</small> : null;
@@ -1760,12 +1785,12 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
         ? (speaker.side === "right" ? "#ffffff" : layout.dmTheme === "dark" ? "#f4f4f6" : "#171719")
         : "var(--preview-text)";
     return [...photoMessages, ...before, <div className={`message-row side-${speaker.side}`} key={assignmentKey}>
-      {layout.showAvatars && speaker.side === "left" && <div className={`message-avatar ${hideAvatar ? "is-placeholder" : ""}`}>{!hideAvatar && (speaker.avatar ? <img src={speaker.avatar} alt="" /> : speaker.name.slice(0, 1))}</div>}
+      {layout.showAvatars && speaker.side === "left" && <div className={`message-avatar ${hideAvatar ? "is-placeholder" : ""}`} style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{!hideAvatar && (speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1))}</div>}
       <div className="message-stack">
-        {layout.showSpeakerNames && !hideAvatar && (speaker.side === "left" || layout.mode === "bubble") && <span className="message-speaker">{speaker.name}</span>}
-        <div className="message-line">{speaker.side === "right" && metaNode}<div className={`message-bubble ${layout.showTails ? "with-tail" : ""}`} style={{ "--bubble-color": fixedBubbleColor, color: fixedTextColor } as CSSProperties}>{attachedImages.map(renderFlowBlock)}{renderInline(paragraph.text, rules, mosaicTerms, assignmentKey, directMarks, page.startOffset + paragraph.start, layout)}</div>{speaker.side === "left" && metaNode}</div>
+        {layout.showSpeakerNames && !hideAvatar && (speaker.side === "left" || layout.mode === "bubble") && <span className="message-speaker" style={layout.mode === "bubble" ? { color: speaker.accentColor } : undefined}>{speaker.name}</span>}
+        <div className={`message-line ${layout.showTails ? "has-protruding-tail" : ""}`}>{speaker.side === "right" && metaNode}<div className={`message-bubble ${layout.showTails ? "with-tail" : ""}`} style={{ "--bubble-color": fixedBubbleColor, color: fixedTextColor } as CSSProperties}>{attachedImages.map(renderFlowBlock)}{renderInline(paragraph.text, rules, mosaicTerms, assignmentKey, directMarks, page.startOffset + paragraph.start, layout)}</div>{speaker.side === "left" && metaNode}</div>
       </div>
-      {layout.showAvatars && speaker.side === "right" && <div className={`message-avatar ${hideAvatar ? "is-placeholder" : ""}`}>{!hideAvatar && (speaker.avatar ? <img src={speaker.avatar} alt="" /> : speaker.name.slice(0, 1))}</div>}
+      {layout.showAvatars && speaker.side === "right" && <div className={`message-avatar ${hideAvatar ? "is-placeholder" : ""}`} style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{!hideAvatar && (speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1))}</div>}
     </div>];
   });
   pageBlocks.filter((block) => !renderedBlocks.has(block.id)).forEach((block) => nodes.push(block.type === "image" && block.photoOnly ? renderPhotoMessage(block) : renderFlowBlock(block)));
@@ -1927,8 +1952,6 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
     "--attribution-y": `${layout.attributionY}%`,
     "--attribution-shift-x": `${-layout.attributionX}%`,
     "--attribution-shift-y": `${-layout.attributionY}%`,
-    "--attribution-gap": `${layout.attributionGap}px`,
-    "--attribution-platform-offset-y": `${layout.attributionPlatformOffsetY}px`,
     "--manuscript-paper-color": design.paperColor,
     "--manuscript-character-offset": `${getManuscriptFontOffset(font.id)}em`,
   } as CSSProperties;
@@ -1939,7 +1962,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
   } as CSSProperties;
   const phoneMessenger = layout.mode === "messenger";
   const bookMode = layout.mode === "classic" && layout.bookFeaturesEnabled;
-  const showAttribution = layout.attributionVisible && Boolean(layout.attributionCharacter || layout.attributionCreator || layout.attributionPlatform);
+  const showAttribution = layout.attributionVisible && Boolean(layout.attributionCharacter || layout.attributionCreator);
   const hasFooterPageNumber = !["manuscript", "document"].includes(layout.mode) && (design.showPageNumber || bookMode);
   const layoutClass = phoneMessenger ? `layout-messenger layout-${layout.messengerStyle}` : `layout-${layout.mode}`;
   const pageTitle = layout.pageTitleOverrides[page.id] || layout.pageTitle || title || "제목 없는 발췌";
@@ -1959,7 +1982,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
         {!phoneMessenger && scrapbookPage && scrapbookPage.elements.some((element) => element.kind === "image") && <ScrapbookPreview page={page} pageState={scrapbookPage} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} layout={layout} selectedId={scrapbookSelectedId} editable={Boolean(onScrapbookChange)} onSelect={onScrapbookSelect} onChange={onScrapbookChange} />}
         {hasFooterPageNumber && <div className="preview-page-number">{pageNumberLabel}</div>}
       </>}
-      {showAttribution && <div className="excerpt-attribution"><div className="excerpt-byline">{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && <i aria-hidden="true" />}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div>{layout.attributionPlatform && <strong>{layout.attributionPlatform}</strong>}</div>}
+      {showAttribution && <div className="excerpt-attribution"><div className={`excerpt-byline bar-${layout.attributionBarPosition}`}>{layout.attributionBarPosition === "leading" && <i aria-hidden="true" />}{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && (layout.attributionBarPosition === "between" ? <i aria-hidden="true" /> : <b aria-hidden="true">·</b>)}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div></div>}
     </div>
   </div>;
 }
@@ -2023,11 +2046,15 @@ export default function QuoteStudio() {
     bold: false,
     italic: false,
     presentationColor: "#6694ea",
-    linePurpose: "emphasis" as LinePurpose,
+    bubbleSide: "left" as SpeakerSide,
     lineStyle: "vertical-solid" as ParagraphLineStyle,
     linePosition: "below" as "above" | "below",
   });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const livePreviewRules = useMemo(() => {
+    if (!editingRuleId || !ruleDraft.start || !ruleDraft.end) return rules;
+    return rules.map((rule) => rule.id === editingRuleId ? normalizeRule({ ...rule, ...ruleDraft }) : rule);
+  }, [rules, editingRuleId, ruleDraft]);
   const [mosaicInput, setMosaicInput] = useState("");
   const [wordSearch, setWordSearch] = useState("");
   const [wordMatchIndex, setWordMatchIndex] = useState(0);
@@ -2068,7 +2095,7 @@ export default function QuoteStudio() {
   const activeToolItem = toolItems[activeToolIndex];
   const candidates = useMemo(() => detectCandidates(source), [source]);
   const assignedSignatures = useMemo(() => new Set(rules.map((rule) => `${rule.start}::${rule.end}`)), [rules]);
-  const dialogueParagraphs = useMemo(() => splitParagraphsWithOffsets(draft).filter((paragraph) => parseSegments(paragraph.text, rules).some((segment) => segment.rule?.role === "dialogue")), [draft, rules]);
+  const dialogueParagraphs = useMemo(() => splitParagraphsWithOffsets(draft).filter((paragraph) => parseSegments(paragraph.text, rules).some((segment) => segment.rule?.role === "dialogue") || (layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text))), [draft, rules, layout.mode]);
   const paragraphReview = useMemo(() => splitParagraphsWithOffsets(draft).map((paragraph) => {
     const mark = paragraphMarks.find((item) => item.start === paragraph.start);
     const detectedRule = parseSegments(paragraph.text, rules).find((segment) => segment.rule && segment.rule.role !== "other")?.rule;
@@ -2791,9 +2818,10 @@ export default function QuoteStudio() {
         const bold = "bold" in patch ? patch.bold || undefined : previous?.bold;
         const italic = "italic" in patch ? patch.italic || undefined : previous?.italic;
         const presentationColor = "presentationColor" in patch ? patch.presentationColor || undefined : previous?.presentationColor;
+        const bubbleSide = "bubbleSide" in patch ? patch.bubbleSide || undefined : previous?.bubbleSide;
         const lineStyle = "lineStyle" in patch ? patch.lineStyle || undefined : previous?.lineStyle;
         const linePosition = "linePosition" in patch ? patch.linePosition || undefined : previous?.linePosition;
-        if (!role && !presentation && !color && !bold && !italic && !presentationColor && !lineStyle && !linePosition) return [];
+        if (!role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
         return [{
           id: previous?.id || makeId("paragraph-mark"),
           start: paragraph.start,
@@ -2804,14 +2832,15 @@ export default function QuoteStudio() {
           bold,
           italic,
           presentationColor,
+          bubbleSide,
           lineStyle,
           linePosition,
         } satisfies ParagraphMark];
       });
       return normalizeParagraphMarks([...untouched, ...updated]).sort((a, b) => a.start - b.start);
     });
-    const hasFormatting = ["color", "bold", "italic", "presentationColor", "lineStyle", "linePosition"].some((key) => key in patch);
-    const action = hasFormatting ? "문단 서식" : patch.presentation === "bubble" ? "말풍선" : patch.presentation === "line" ? "강조선" : patch.presentation === "quote" ? "인용선" : patch.role === "dialogue" ? "대사" : patch.role === "narration" ? "서술" : patch.role === "thought" ? "속마음" : patch.role === "other" ? "기타" : "기본 표시";
+    const hasFormatting = ["color", "bold", "italic", "presentationColor", "bubbleSide", "lineStyle", "linePosition"].some((key) => key in patch);
+    const action = hasFormatting ? "문단 서식" : patch.presentation === "bubble" ? "말풍선" : patch.presentation === "line" ? "강조선" : patch.role === "dialogue" ? "대사" : patch.role === "narration" ? "서술" : patch.role === "thought" ? "속마음" : patch.role === "other" ? "기타" : "기본 표시";
     setToast(`선택한 ${selectedParagraphStarts.length}개 문단을 ${action}로 지정했습니다.`);
   }
 
@@ -2821,6 +2850,7 @@ export default function QuoteStudio() {
       bold: paragraphStyleDraft.bold,
       italic: paragraphStyleDraft.italic,
       presentationColor: paragraphStyleDraft.presentationColor,
+      bubbleSide: paragraphStyleDraft.bubbleSide,
       lineStyle: composeVerticalLineStyle(getLineStroke(paragraphStyleDraft.lineStyle)),
       linePosition: paragraphStyleDraft.linePosition,
     });
@@ -2831,11 +2861,15 @@ export default function QuoteStudio() {
     const verticalLineStyle = composeVerticalLineStyle(getLineStroke(next.lineStyle));
     setParagraphStyleDraft({ ...next, lineStyle: verticalLineStyle });
     applyParagraphMarkPatch({
-      presentation: next.linePurpose === "quote" ? "quote" : "line",
+      presentation: "line",
       presentationColor: next.presentationColor,
       lineStyle: verticalLineStyle,
-      linePosition: next.linePosition,
     });
+  }
+
+  function applyParagraphBubbleDraft(bubbleSide: SpeakerSide = paragraphStyleDraft.bubbleSide) {
+    setParagraphStyleDraft((current) => ({ ...current, bubbleSide }));
+    applyParagraphMarkPatch({ presentation: "bubble", presentationColor: paragraphStyleDraft.presentationColor, bubbleSide });
   }
 
   function clearSelectedParagraphMarks() {
@@ -3448,13 +3482,12 @@ export default function QuoteStudio() {
       <label className="range-label"><span>구문 글자 크기<b>{ruleDraft.fontScale}%</b></span><input type="range" min="50" max="240" step="5" value={ruleDraft.fontScale} onChange={(event) => setRuleDraft({ ...ruleDraft, fontScale: Number(event.target.value) })} /></label>
       <div className="rule-line-editor">
         <span className="mini-label">표현 방식</span>
-        <div className="three-way-control paragraph-presentation-control"><button className={ruleDraft.presentation === "default" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "default" })}>기본</button><button className={ruleDraft.presentation === "line" || ruleDraft.presentation === "quote" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: ruleDraft.presentation === "quote" ? "quote" : "line", lineStyle: ruleDraft.lineStyle === "none" ? "vertical-solid" : verticalizeLineStyle(ruleDraft.lineStyle) })}>선 표현</button><button className={ruleDraft.presentation === "bubble" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "bubble" })}>말풍선</button></div>
-        {(ruleDraft.presentation === "line" || ruleDraft.presentation === "quote") && <div className="line-composer">
-          <div><span className="mini-label">용도</span><div className="two-way-control"><button className={ruleDraft.presentation === "line" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "line" })}>강조</button><button className={ruleDraft.presentation === "quote" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "quote" })}>인용</button></div></div>
+        <div className="three-way-control paragraph-presentation-control"><button className={ruleDraft.presentation === "default" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "default" })}>기본</button><button className={ruleDraft.presentation === "line" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "line", lineStyle: ruleDraft.lineStyle === "none" ? "vertical-solid" : verticalizeLineStyle(ruleDraft.lineStyle) })}>강조선</button><button className={ruleDraft.presentation === "bubble" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, presentation: "bubble" })}>말풍선</button></div>
+        {ruleDraft.presentation === "line" && <div className="line-composer">
           <div><span className="mini-label">선 종류</span><div className="four-way-control">{(["solid", "double", "dotted", "dashed"] as LineStroke[]).map((stroke) => <button className={getLineStroke(ruleDraft.lineStyle) === stroke ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, lineStyle: composeVerticalLineStyle(stroke) })} key={stroke}>{stroke === "solid" ? "실선" : stroke === "double" ? "이중선" : stroke === "dotted" ? "점선" : "파선"}</button>)}</div></div>
-          <label className="line-color-field">선 색<input type="color" value={ruleDraft.lineColor} onChange={(event) => setRuleDraft({ ...ruleDraft, lineColor: event.target.value })} /></label>
+          <label className="line-color-field">선 색<input type="color" value={ruleDraft.lineColor} onInput={(event) => { const lineColor = event.currentTarget.value; setRuleDraft((current) => ({ ...current, lineColor })); }} onChange={(event) => setRuleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label>
         </div>}
-        {ruleDraft.presentation === "bubble" && <div className="rule-line-fields"><span className="presentation-color-description">말풍선 배경</span><label className="line-color-field">배경색<input type="color" value={ruleDraft.lineColor} onChange={(event) => setRuleDraft({ ...ruleDraft, lineColor: event.target.value })} /></label></div>}
+        {ruleDraft.presentation === "bubble" && <div className="line-composer"><div><span className="mini-label">말풍선 위치</span><div className="two-way-control"><button className={ruleDraft.bubbleSide === "left" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, bubbleSide: "left" })}>왼쪽</button><button className={ruleDraft.bubbleSide === "right" ? "is-selected" : ""} onClick={() => setRuleDraft({ ...ruleDraft, bubbleSide: "right" })}>오른쪽</button></div></div><div className="rule-line-fields"><span className="presentation-color-description">말풍선 배경</span><label className="line-color-field">배경색<input type="color" value={ruleDraft.lineColor} onInput={(event) => { const lineColor = event.currentTarget.value; setRuleDraft((current) => ({ ...current, lineColor })); }} onChange={(event) => setRuleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label></div></div>}
       </div>
       <label className="check-control wide-check"><input type="checkbox" checked={ruleDraft.removeMarkers} onChange={(event) => setRuleDraft({ ...ruleDraft, removeMarkers: event.target.checked })} />미리보기에서 기호 감추기</label>
       <button className="primary-button full-button" onClick={saveRule}>{editingRuleId ? "변경 저장" : "규칙 추가"}</button>
@@ -3498,7 +3531,7 @@ export default function QuoteStudio() {
         <div className="paragraph-review-list">{paragraphReview.length ? paragraphReview.map((paragraph, index) => {
           const selected = selectedParagraphStarts.includes(paragraph.start);
           const roleLabel = paragraph.resolvedRole === "dialogue" ? "대사" : paragraph.resolvedRole === "narration" ? "서술" : paragraph.resolvedRole === "thought" ? "속마음" : "미지정";
-          const presentationLabel = paragraph.resolvedPresentation === "bubble" ? "말풍선" : paragraph.resolvedPresentation === "line" ? "강조선" : paragraph.resolvedPresentation === "quote" ? "인용선" : "기본 표시";
+          const presentationLabel = paragraph.resolvedPresentation === "bubble" ? "말풍선" : paragraph.resolvedPresentation === "line" ? "강조선" : "기본 표시";
           return <div className={`paragraph-review-item ${selected ? "is-selected" : ""}`} key={`${paragraph.start}-${index}`}>
             <button className="paragraph-check" aria-pressed={selected} aria-label={`${index + 1}번째 문단 ${selected ? "선택 해제" : "복수 선택"}`} title="여러 문단을 함께 선택할 수 있습니다" onClick={() => toggleParagraphSelection(paragraph.start)}><span>{selected ? "✓" : index + 1}</span></button>
             <button className="paragraph-review-copy" onClick={() => focusParagraph(paragraph.start, paragraph.end)}><span>{paragraph.text.slice(0, 90)}{paragraph.text.length > 90 ? "…" : ""}</span><small>{roleLabel} · {presentationLabel}{paragraph.mark ? " · 직접 지정" : paragraph.detectedRule ? ` · ${paragraph.detectedRule.label}` : ""}</small></button>
@@ -3506,14 +3539,14 @@ export default function QuoteStudio() {
         }) : <div className="empty-state">수정본에 확인할 문단이 없습니다.</div>}</div>
         <div className="paragraph-batch-editor">
           <span className="mini-label">문장 종류</span><div className="four-way-control"><button onClick={() => applyParagraphMarkPatch({ role: "dialogue" })}>대사</button><button onClick={() => applyParagraphMarkPatch({ role: "narration" })}>서술</button><button onClick={() => applyParagraphMarkPatch({ role: "thought" })}>속마음</button><button onClick={() => applyParagraphMarkPatch({ role: "other" })}>기타</button></div>
-          <span className="mini-label">표현 방식</span><div className="three-way-control paragraph-presentation-control"><button onClick={() => applyParagraphMarkPatch({ presentation: null })}>기본</button><button onClick={() => applyParagraphLineDraft()}>선 표현</button><button onClick={() => applyParagraphMarkPatch({ presentation: "bubble", presentationColor: paragraphStyleDraft.presentationColor })}>말풍선</button></div>
+          <span className="mini-label">표현 방식</span><div className="three-way-control paragraph-presentation-control"><button onClick={() => applyParagraphMarkPatch({ presentation: null })}>기본</button><button onClick={() => applyParagraphLineDraft()}>강조선</button><button onClick={() => applyParagraphBubbleDraft()}>말풍선</button></div>
           <div className="paragraph-format-editor">
             <span className="mini-label">문단 서식</span>
             <label className="color-control">글자색<input type="color" value={paragraphStyleDraft.color} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, color: event.target.value }))} /></label>
             <div className="inline-controls paragraph-emphasis-controls"><label className="check-control"><input type="checkbox" checked={paragraphStyleDraft.bold} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, bold: event.target.checked }))} />굵게</label><label className="check-control"><input type="checkbox" checked={paragraphStyleDraft.italic} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, italic: event.target.checked }))} />기울임</label></div>
             <label className="color-control">표현 색<input aria-label="문단 표현 색" type="color" value={paragraphStyleDraft.presentationColor} onChange={(event) => setParagraphStyleDraft((current) => ({ ...current, presentationColor: event.target.value }))} /></label>
+            <div><span className="mini-label">말풍선 위치</span><div className="two-way-control"><button className={paragraphStyleDraft.bubbleSide === "left" ? "is-selected" : ""} onClick={() => applyParagraphBubbleDraft("left")}>왼쪽</button><button className={paragraphStyleDraft.bubbleSide === "right" ? "is-selected" : ""} onClick={() => applyParagraphBubbleDraft("right")}>오른쪽</button></div></div>
             <div className="line-composer">
-              <div><span className="mini-label">용도</span><div className="two-way-control"><button className={paragraphStyleDraft.linePurpose === "emphasis" ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ linePurpose: "emphasis" })}>강조</button><button className={paragraphStyleDraft.linePurpose === "quote" ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ linePurpose: "quote" })}>인용</button></div></div>
               <div><span className="mini-label">선 종류</span><div className="four-way-control">{(["solid", "double", "dotted", "dashed"] as LineStroke[]).map((stroke) => <button className={getLineStroke(paragraphStyleDraft.lineStyle) === stroke ? "is-selected" : ""} onClick={() => applyParagraphLineDraft({ lineStyle: composeVerticalLineStyle(stroke) })} key={stroke}>{stroke === "solid" ? "실선" : stroke === "double" ? "이중선" : stroke === "dotted" ? "점선" : "파선"}</button>)}</div></div>
             </div>
             <button className="primary-button full-button" onClick={applySelectedParagraphFormatting}>선택 문단에 서식 적용</button>
@@ -3522,7 +3555,36 @@ export default function QuoteStudio() {
         </div>
       </div>
       {rules.length > 0 && <div className="rule-list">{rules.map((rule) => <div className={`rule-chip ${editingRuleId === rule.id ? "is-editing" : ""}`} key={rule.id}><span className="rule-dot" style={{ background: rule.color }} /><span><b>{rule.label}</b><small>{rule.start} … {rule.end}</small></span><div className="rule-actions"><button aria-label={`${rule.label} 규칙 수정`} onClick={() => beginEditRule(rule)}>수정</button><button aria-label={`${rule.label} 규칙 삭제`} onClick={() => deleteRule(rule.id)}>×</button></div></div>)}</div>}
-      {["bubble", "messenger"].includes(layout.mode) && <div className="control-card dialogue-character-card"><div className="history-heading"><span className="field-label">메신저 화자 구분</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 캐릭터 추가</button></div><p className="helper-note">말풍선·메신저 템플릿에서만 화자와 좌우 방향을 사용합니다. 일반 레이아웃의 문단 말풍선에는 이름이 표시되지 않습니다.</p><label className="check-control wide-check"><input type="checkbox" checked={layout.dialogueShowNames} onChange={(event) => setLayout((current) => ({ ...current, dialogueShowNames: event.target.checked }))} />캔버스에 캐릭터명 표시</label><div className="dialogue-character-list">{layout.speakers.map((speaker) => <div className="dialogue-character-editor" key={speaker.id}><input aria-label="대사 캐릭터명" value={speaker.name} onChange={(event) => updateSpeaker(speaker.id, { name: event.target.value })} placeholder="위해" /><input aria-label={`${speaker.name} 강조선 색`} title="강조선 색" type="color" value={speaker.accentColor} onChange={(event) => updateSpeaker(speaker.id, { accentColor: event.target.value })} /><button aria-label={`${speaker.name} 캐릭터 삭제`} disabled={layout.speakers.length <= 1} onClick={() => removeSpeaker(speaker.id)}>삭제</button></div>)}</div>{dialogueParagraphs.length ? <div className="dialogue-assignment-list">{dialogueParagraphs.map((paragraph) => { const key = `text:${paragraph.start}`; return <label key={key}><span>{paragraph.text.slice(0, 46)}{paragraph.text.length > 46 ? "…" : ""}</span><select value={layout.assignments[key] || ""} onChange={(event) => setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: event.target.value } }))}><option value="">미지정</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name}</option>)}</select></label>; })}</div> : <div className="empty-state">의미가 ‘대사’인 구문 규칙을 만들면 문단별 지정 항목이 나타납니다.</div>}</div>}
+      {["bubble", "messenger"].includes(layout.mode) && <div className="control-card dialogue-character-card">
+        <div className="history-heading"><span className="field-label">화자 지정</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 캐릭터 추가</button></div>
+        <p className="helper-note">{layout.mode === "bubble" ? "큰따옴표로 감싼 문단은 첫 화자의 말풍선으로 자동 배치됩니다. 대사 구문과 큰따옴표 문단의 화자를 이곳에서 변경할 수 있습니다." : "대사로 지정한 문단의 화자를 이곳에서 변경할 수 있습니다."}</p>
+        <label className="check-control wide-check"><input type="checkbox" checked={layout.dialogueShowNames} onChange={(event) => setLayout((current) => ({ ...current, dialogueShowNames: event.target.checked }))} />캔버스에 캐릭터명 표시</label>
+        <div className="dialogue-character-list">{layout.speakers.map((speaker) => <div className="dialogue-character-editor" key={speaker.id}><input aria-label="대사 캐릭터명" value={speaker.name} onChange={(event) => updateSpeaker(speaker.id, { name: event.target.value })} placeholder="위해" /><input aria-label={`${speaker.name} 강조선 색`} title="강조선 색" type="color" value={speaker.accentColor} onChange={(event) => updateSpeaker(speaker.id, { accentColor: event.target.value })} /><button aria-label={`${speaker.name} 캐릭터 삭제`} disabled={layout.speakers.length <= 1} onClick={() => removeSpeaker(speaker.id)}>삭제</button></div>)}</div>
+        {dialogueParagraphs.length ? <>
+          <div className="bulk-speakers">{layout.speakers.map((speaker) => <button key={speaker.id} onClick={() => setLayout((current) => {
+            const next = { ...current.assignments };
+            dialogueParagraphs.forEach((paragraph) => { next[`text:${paragraph.start}`] = speaker.id; });
+            return { ...current, assignments: next };
+          })}>모두 {speaker.name}</button>)}<button onClick={() => setLayout((current) => {
+            const next = { ...current.assignments };
+            dialogueParagraphs.forEach((paragraph) => {
+              const key = `text:${paragraph.start}`;
+              if (layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text)) next[key] = NARRATION_ASSIGNMENT;
+              else delete next[key];
+            });
+            return { ...current, assignments: next };
+          })}>모두 미지정·서술</button></div>
+          <div className="dialogue-assignment-list">{dialogueParagraphs.map((paragraph) => {
+            const key = `text:${paragraph.start}`;
+            const explicit = layout.assignments[key];
+            const assigned = explicit === NARRATION_ASSIGNMENT ? "" : explicit || (layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text) ? layout.speakers[0]?.id || "" : "");
+            return <label key={key}><span>{paragraph.text.slice(0, 46)}{paragraph.text.length > 46 ? "…" : ""}</span><select value={assigned} onChange={(event) => {
+              const nextValue = event.target.value || (layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text) ? NARRATION_ASSIGNMENT : "");
+              setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: nextValue } }));
+            }}><option value="">미지정·서술</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name} · {speaker.side === "left" ? "왼쪽" : "오른쪽"}</option>)}</select></label>;
+          })}</div>
+        </> : <div className="empty-state">대사 구문을 지정하거나 큰따옴표 문단을 입력하면 화자 지정 항목이 나타납니다.</div>}
+      </div>}
     </div>;
 
     if (activeTool === "edit") return <div className="tool-content">
@@ -3530,29 +3592,17 @@ export default function QuoteStudio() {
       <div className="control-card highlight-card"><div className="history-heading"><span className="field-label">형광펜</span><small>{directMarks.filter((mark) => mark.kind === "highlight" || mark.style.highlightColor !== "transparent").length}개 적용</small></div><p className="helper-note">형광펜은 구문 규칙과 다른 선택 서식보다 항상 위에 표시됩니다.</p>
         <div className="highlight-card-controls"><label className="color-control">형광펜 색<input type="color" value={directStyleDraft.highlightColor === "transparent" ? "#fff0a8" : directStyleDraft.highlightColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, highlightColor: event.target.value }))} /></label><button className="primary-button" onClick={() => applyHighlight(directStyleDraft.highlightColor === "transparent" ? "#fff0a8" : directStyleDraft.highlightColor)}>선택 영역에 적용</button><button className="secondary-button" onClick={clearHighlight}>선택 영역에서 제거</button></div>
       </div>
-      <div className="control-card direct-style-card"><div className="history-heading"><span className="field-label">글자 서식</span><small>{directMarks.filter((mark) => mark.kind !== "highlight").length}개 적용</small></div><p className="helper-note">본문 기본색은 전체 글자에 적용됩니다. 선택 글자색과 나머지 서식은 수정본에서 선택한 범위만 바꿉니다.</p>
-        <div className="text-color-pair"><label className="color-control">본문 기본색<input type="color" value={design.textColor} onChange={(event) => setDesign((current) => ({ ...current, textColor: event.target.value }))} /></label><label className="color-control">선택 글자색<input type="color" value={directStyleDraft.color} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, color: event.target.value }))} /></label></div>
-        <span className="quick-style-label">선택 영역 서식 지정</span>
-        <div className="quick-style-row"><button className="format-icon-button" aria-label="선택 영역 굵게" title="굵게" onClick={() => applyDirectStyle({ bold: true })}><span className="format-icon is-bold" aria-hidden="true">B</span><span>굵게</span></button><button className="format-icon-button" aria-label="선택 영역 기울임" title="기울임" onClick={() => applyDirectStyle({ italic: true })}><span className="format-icon is-italic" aria-hidden="true">I</span><span>기울임</span></button><button aria-label="선택 영역 서식 지우기" onClick={clearDirectStyle}>서식 지우기</button></div>
-        <label>글꼴<select value={directStyleDraft.fontId} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontId: event.target.value as FontId | "inherit" }))}><option value="inherit">본문 글꼴 따름</option>{orderedFonts.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label>
-        <label className="range-label"><span>선택 글자 크기<b>{directStyleDraft.fontScale}%</b></span><input type="range" min="50" max="240" step="5" value={directStyleDraft.fontScale} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontScale: Number(event.target.value) }))} /></label>
-        <div className="inline-controls"><label className="check-control"><input type="checkbox" checked={directStyleDraft.bold} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, bold: event.target.checked }))} />굵게</label><label className="check-control"><input type="checkbox" checked={directStyleDraft.italic} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, italic: event.target.checked }))} />기울임</label></div>
-        <div className="rule-line-editor direct-line-editor"><div className="rule-line-fields"><label>선과 구분<select value={verticalizeLineStyle(directStyleDraft.lineStyle)} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineStyle: event.target.value as TextLineStyle }))}>{textLineStyleOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><label className="line-color-field">선 색<input type="color" value={directStyleDraft.lineColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label></div></div>
-        <button className="primary-button full-button" onClick={() => applyDirectStyle()}>선택 영역에 적용</button>
-      </div>
       <div className="control-card attribution-control">
         <div className="history-heading"><span className="field-label">발췌 정보</span><small>모든 템플릿</small></div>
         <label className="check-control wide-check"><input type="checkbox" checked={layout.attributionVisible} onChange={(event) => setLayout((current) => ({ ...current, attributionVisible: event.target.checked }))} />캔버스에 발췌 정보 표시</label>
         <div className="split-fields"><label>캐릭터명<input value={layout.attributionCharacter} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCharacter: event.target.value }))} placeholder="예: 위해" /></label><label>제작자<input value={layout.attributionCreator} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCreator: event.target.value }))} placeholder="예: wesea" /></label></div>
-        <label>플랫폼명<input value={layout.attributionPlatform} maxLength={80} onChange={(event) => setLayout((current) => ({ ...current, attributionPlatform: event.target.value }))} placeholder="예: site name" /></label>
-        <p className="helper-note">캐릭터명과 제작자는 첫 줄, 플랫폼명은 둘째 줄에 표시됩니다. 입력하지 않은 항목은 보이지 않으며, 아래에서 정보 전체의 위치와 두 줄 사이 간격을 조정할 수 있습니다.</p>
+        <span className="mini-label">막대 위치</span><div className="two-way-control"><button className={layout.attributionBarPosition === "between" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, attributionBarPosition: "between" }))}>이름 사이</button><button className={layout.attributionBarPosition === "leading" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, attributionBarPosition: "leading" }))}>왼쪽 끝</button></div>
+        <p className="helper-note">캐릭터명과 제작자를 한 줄에 표시합니다. 막대는 두 이름 사이 또는 정보 왼쪽 끝에 둘 수 있습니다.</p>
         {layout.attributionVisible && <div className="attribution-position-controls">
           <span className="mini-label">발췌 정보 박스 위치</span>
           <label className="range-label"><span>가로 위치<b>{layout.attributionX}%</b></span><input type="range" min="0" max="100" value={layout.attributionX} onChange={(event) => setLayout((current) => ({ ...current, attributionX: Number(event.target.value) }))} /></label>
           <label className="range-label"><span>세로 위치<b>{layout.attributionY}%</b></span><input type="range" min="0" max="100" value={layout.attributionY} onChange={(event) => setLayout((current) => ({ ...current, attributionY: Number(event.target.value) }))} /></label>
-          <label className="range-label"><span>플랫폼 가로 위치<b>{layout.attributionGap}px</b></span><input type="range" min="-400" max="400" step="1" value={layout.attributionGap} onChange={(event) => setLayout((current) => ({ ...current, attributionGap: Number(event.target.value) }))} /></label>
-          <label className="range-label"><span>플랫폼 세로 단차<b>{layout.attributionPlatformOffsetY}px</b></span><input type="range" min="0" max="100" value={layout.attributionPlatformOffsetY} onChange={(event) => setLayout((current) => ({ ...current, attributionPlatformOffsetY: Number(event.target.value) }))} /></label>
-          <button className="secondary-button full-button" onClick={() => setLayout((current) => ({ ...current, attributionX: 50, attributionY: 84, attributionGap: 0, attributionPlatformOffsetY: 12 }))}>위치·간격 초기화</button>
+          <button className="secondary-button full-button" onClick={() => setLayout((current) => ({ ...current, attributionX: 50, attributionY: 84 }))}>위치 초기화</button>
         </div>}
       </div>
       <div className="control-card flow-block-card">
@@ -3590,6 +3640,16 @@ export default function QuoteStudio() {
         </>}
       </div>
       <div className="control-card"><span className="field-label">페이지 분할</span><button className="secondary-button full-button" onClick={insertManualBreak}>커서 위치에 수동 경계 넣기</button><label className="check-control wide-check"><input type="checkbox" checked={layout.autoPaginate} onChange={(event) => setLayout((current) => ({ ...current, autoPaginate: event.target.checked }))} />남은 넘침 자동 분할</label>{layout.autoPaginate && <><label>자동 분할 기준<select value={layout.paginationBasis} onChange={(event) => setLayout((current) => ({ ...current, paginationBasis: event.target.value as PaginationBasis }))}><option value="canvas">현재 캔버스·여백·글자 크기</option><option value="characters">직접 지정한 글자 수</option></select></label>{layout.paginationBasis === "canvas" ? <div className="fixed-size-notice"><b>현재 규격 예상량</b><span>페이지당 약 {estimatedPageCapacity.toLocaleString()}자 · 문단 우선</span></div> : <label className="range-label"><span>페이지당 목표 글자<b>{layout.pageCapacity.toLocaleString()}자</b></span><input type="range" min="120" max="6000" step="20" value={layout.pageCapacity} onChange={(event) => setLayout((current) => ({ ...current, pageCapacity: Number(event.target.value) }))} /></label>}</>}<p className="helper-note">자동 분할은 캔버스에 맞춰 문단을 다음 페이지로 넘깁니다. 직접 넣은 수동 경계가 우선 적용됩니다.</p></div>
+      <div className="control-card direct-style-card"><div className="history-heading"><span className="field-label">글자 서식</span><small>{directMarks.filter((mark) => mark.kind !== "highlight").length}개 적용</small></div><p className="helper-note">본문 기본색은 전체 글자에 적용됩니다. 선택 글자색과 나머지 서식은 수정본에서 선택한 범위만 바꿉니다.</p>
+        <div className="text-color-pair"><label className="color-control">본문 기본색<input type="color" value={design.textColor} onChange={(event) => setDesign((current) => ({ ...current, textColor: event.target.value }))} /></label><label className="color-control">선택 글자색<input type="color" value={directStyleDraft.color} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, color: event.target.value }))} /></label></div>
+        <span className="quick-style-label">선택 영역 서식 지정</span>
+        <div className="quick-style-row"><button className="format-icon-button" aria-label="선택 영역 굵게" title="굵게" onClick={() => applyDirectStyle({ bold: true })}><span className="format-icon is-bold" aria-hidden="true">B</span><span>굵게</span></button><button className="format-icon-button" aria-label="선택 영역 기울임" title="기울임" onClick={() => applyDirectStyle({ italic: true })}><span className="format-icon is-italic" aria-hidden="true">I</span><span>기울임</span></button><button aria-label="선택 영역 서식 지우기" onClick={clearDirectStyle}>서식 지우기</button></div>
+        <label>글꼴<select value={directStyleDraft.fontId} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontId: event.target.value as FontId | "inherit" }))}><option value="inherit">본문 글꼴 따름</option>{orderedFonts.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label>
+        <label className="range-label"><span>선택 글자 크기<b>{directStyleDraft.fontScale}%</b></span><input type="range" min="50" max="240" step="5" value={directStyleDraft.fontScale} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, fontScale: Number(event.target.value) }))} /></label>
+        <div className="inline-controls"><label className="check-control"><input type="checkbox" checked={directStyleDraft.bold} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, bold: event.target.checked }))} />굵게</label><label className="check-control"><input type="checkbox" checked={directStyleDraft.italic} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, italic: event.target.checked }))} />기울임</label></div>
+        <div className="rule-line-editor direct-line-editor"><div className="rule-line-fields"><label>선과 구분<select value={verticalizeLineStyle(directStyleDraft.lineStyle)} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineStyle: event.target.value as TextLineStyle }))}>{textLineStyleOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><label className="line-color-field">선 색<input type="color" value={directStyleDraft.lineColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, lineColor: event.target.value }))} /></label></div></div>
+        <button className="primary-button full-button" onClick={() => applyDirectStyle()}>선택 영역에 적용</button>
+      </div>
       <div className="stats-grid"><div><b>{charCount.toLocaleString()}</b><span>글자</span></div><div><b>{draft.split(/\s+/).filter(Boolean).length.toLocaleString()}</b><span>단어</span></div><div><b>{displayPages.length}</b><span>페이지</span></div></div>
     </div>;
 
@@ -3739,23 +3799,35 @@ export default function QuoteStudio() {
             <div className="speaker-editor-actions"><button onClick={() => { setAvatarTarget(speaker.id); avatarInputRef.current?.click(); }}>사진</button><button aria-label={`${speaker.name} 삭제`} onClick={() => removeSpeaker(speaker.id)}>삭제</button></div>
           </div>)}
           <input ref={avatarInputRef} className="visually-hidden" type="file" accept="image/*" onChange={handleAvatarFile} />
-          <div className="messenger-options"><label><input type="checkbox" checked={layout.showAvatars} onChange={(event) => setLayout((current) => ({ ...current, showAvatars: event.target.checked }))} />프로필</label><label><input type="checkbox" checked={layout.compactAvatars} onChange={(event) => setLayout((current) => ({ ...current, compactAvatars: event.target.checked }))} />연속 프로필 생략</label><label><input type="checkbox" checked={layout.showTails} onChange={(event) => setLayout((current) => ({ ...current, showTails: event.target.checked }))} />말꼬리</label><label><input type="checkbox" checked={layout.showSpeakerNames} onChange={(event) => setLayout((current) => ({ ...current, showSpeakerNames: event.target.checked }))} />화자명</label><label><input type="checkbox" checked={layout.showTime} onChange={(event) => setLayout((current) => ({ ...current, showTime: event.target.checked }))} />시간 표시</label><label><input type="checkbox" checked={layout.showReadStatus} onChange={(event) => setLayout((current) => ({ ...current, showReadStatus: event.target.checked }))} />읽음 표시</label></div>
+          <div className="messenger-options"><label><input type="checkbox" checked={layout.showAvatars} onChange={(event) => setLayout((current) => ({ ...current, showAvatars: event.target.checked }))} />프로필</label><label><input type="checkbox" checked={layout.compactAvatars} onChange={(event) => setLayout((current) => ({ ...current, compactAvatars: event.target.checked }))} />연속 프로필 생략</label><label><input type="checkbox" checked={layout.showTails} onChange={(event) => setLayout((current) => ({ ...current, showTails: event.target.checked }))} />돌출 꼬리</label><label><input type="checkbox" checked={layout.showSpeakerNames} onChange={(event) => setLayout((current) => ({ ...current, showSpeakerNames: event.target.checked }))} />화자명</label><label><input type="checkbox" checked={layout.showTime} onChange={(event) => setLayout((current) => ({ ...current, showTime: event.target.checked }))} />시간 표시</label><label><input type="checkbox" checked={layout.showReadStatus} onChange={(event) => setLayout((current) => ({ ...current, showReadStatus: event.target.checked }))} />읽음 표시</label></div>
           <div className="bubble-detail-grid"><label>최대 너비 · %<input type="number" min="35" max="92" value={layout.bubbleMaxWidth} onChange={(event) => setLayout((current) => ({ ...current, bubbleMaxWidth: clamp(Number(event.target.value), 35, 92) }))} /></label><label>모서리 · px<input type="number" min="0" max="36" value={layout.bubbleRadius} onChange={(event) => setLayout((current) => ({ ...current, bubbleRadius: clamp(Number(event.target.value), 0, 36) }))} /></label><label>가로 안쪽 · px<input type="number" min="4" max="30" value={layout.bubblePaddingX} onChange={(event) => setLayout((current) => ({ ...current, bubblePaddingX: clamp(Number(event.target.value), 4, 30) }))} /></label><label>세로 안쪽 · px<input type="number" min="3" max="24" value={layout.bubblePaddingY} onChange={(event) => setLayout((current) => ({ ...current, bubblePaddingY: clamp(Number(event.target.value), 3, 24) }))} /></label><label>메시지 간격 · px<input type="number" min="0" max="36" value={layout.messageGap} onChange={(event) => setLayout((current) => ({ ...current, messageGap: clamp(Number(event.target.value), 0, 36) }))} /></label></div>
         </div>
-        {visiblePage && !visiblePage.cover && <div className="control-card"><div className="history-heading"><span className="field-label">현재 페이지 화자 지정</span><small>{visibleParagraphs.length}문단</small></div><div className="bulk-speakers">{layout.speakers.map((speaker) => <button onClick={() => {
+        {layout.mode === "messenger" && visiblePage && !visiblePage.cover && <div className="control-card"><div className="history-heading"><span className="field-label">현재 페이지 화자 지정</span><small>{visibleParagraphs.length}문단</small></div><div className="bulk-speakers">{layout.speakers.map((speaker) => <button onClick={() => {
           const next = { ...layout.assignments };
           visibleParagraphs.forEach((paragraph, index) => { next[`${visiblePage.id}:${index}`] = speaker.id; next[`text:${visiblePage.startOffset + paragraph.start}`] = speaker.id; });
           setLayout((current) => ({ ...current, assignments: next }));
         }} key={speaker.id}>모두 {speaker.name}</button>)}<button onClick={() => {
           const next = { ...layout.assignments };
-          visibleParagraphs.forEach((paragraph, index) => { delete next[`${visiblePage.id}:${index}`]; delete next[`text:${visiblePage.startOffset + paragraph.start}`]; });
+          visibleParagraphs.forEach((paragraph, index) => {
+            const value = layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text) ? NARRATION_ASSIGNMENT : "";
+            if (value) {
+              next[`${visiblePage.id}:${index}`] = value;
+              next[`text:${visiblePage.startOffset + paragraph.start}`] = value;
+            } else {
+              delete next[`${visiblePage.id}:${index}`];
+              delete next[`text:${visiblePage.startOffset + paragraph.start}`];
+            }
+          });
           setLayout((current) => ({ ...current, assignments: next }));
         }}>모두 미지정</button></div><div className="paragraph-speakers">{visibleParagraphs.map((paragraph, index) => {
           const key = `${visiblePage.id}:${index}`;
           const globalKey = `text:${visiblePage.startOffset + paragraph.start}`;
-          const assigned = layout.assignments[globalKey] || layout.assignments[key] || "";
+          const assigned = resolveMessageSpeakerId(layout, paragraph.text, globalKey, key);
           const meta = layout.messageMeta[key] || { time: "", readStatus: "" };
-          return <div className="paragraph-speaker-item" key={key}><span>{paragraph.text.slice(0, 42)}{paragraph.text.length > 42 ? "…" : ""}</span><select aria-label={`문단 ${index + 1} 화자`} value={assigned} onChange={(event) => setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: event.target.value, [globalKey]: event.target.value } }))}><option value="">미지정·서술</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name} · {speaker.side === "left" ? "왼쪽" : "오른쪽"}</option>)}</select>{assigned && (layout.showTime || layout.showReadStatus) && <div className="message-meta-editor">{layout.showTime && <label>시간<input type="time" value={meta.time} onChange={(event) => updateMessageMeta(key, { time: event.target.value })} /></label>}{layout.showReadStatus && <label>읽음<input value={meta.readStatus} maxLength={8} onChange={(event) => updateMessageMeta(key, { readStatus: event.target.value })} placeholder="1 또는 읽음" /></label>}</div>}</div>;
+          return <div className="paragraph-speaker-item" key={key}><span>{paragraph.text.slice(0, 42)}{paragraph.text.length > 42 ? "…" : ""}</span><select aria-label={`문단 ${index + 1} 화자`} value={assigned} onChange={(event) => {
+            const nextValue = event.target.value || (layout.mode === "bubble" && isDoubleQuotedParagraph(paragraph.text) ? NARRATION_ASSIGNMENT : "");
+            setLayout((current) => ({ ...current, assignments: { ...current.assignments, [key]: nextValue, [globalKey]: nextValue } }));
+          }}><option value="">미지정·서술</option>{layout.speakers.map((speaker) => <option value={speaker.id} key={speaker.id}>{speaker.name} · {speaker.side === "left" ? "왼쪽" : "오른쪽"}</option>)}</select>{assigned && (layout.showTime || layout.showReadStatus) && <div className="message-meta-editor">{layout.showTime && <label>시간<input type="time" value={meta.time} onChange={(event) => updateMessageMeta(key, { time: event.target.value })} /></label>}{layout.showReadStatus && <label>읽음<input value={meta.readStatus} maxLength={8} onChange={(event) => updateMessageMeta(key, { readStatus: event.target.value })} placeholder="1 또는 읽음" /></label>}</div>}</div>;
         })}</div></div>}
       </>}
     </div>;
@@ -3794,7 +3866,7 @@ export default function QuoteStudio() {
       </aside>
       <section className="canvas-panel panel-shell">
         <div className="canvas-toolbar"><div><b>캔버스</b><span>{canvasLayoutLabels[layout.mode] || layout.mode.toUpperCase()} · {selectedOutputSize.width} × {selectedOutputSize.height}px</span></div><div className="canvas-toolbar-actions"><select aria-label="캔버스 맞춤 방식" value={canvasFitMode} onChange={(event) => { const mode = event.target.value as CanvasFitMode; if (mode === "custom") setCanvasFitMode(mode); else if (mode === "all") fitCanvas("all"); else if (mode === "width") fitCanvas("width"); else fitCanvas("height"); }}><option value="all">전체 맞춤</option><option value="width">너비 맞춤</option><option value="height">높이 맞춤</option><option value="custom">사용자 확대</option></select><button onClick={() => setCustomZoom(canvasZoom - 10)}>−</button><output>{canvasZoom}%</output><button onClick={() => setCustomZoom(canvasZoom + 10)}>＋</button><button onClick={() => setCustomZoom(100)}>100%</button></div></div>
-        <div ref={canvasWorkbenchRef} className="canvas-workbench"><div className={`central-preview-stage ${layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" ? "is-spread" : ""}`} style={{ "--canvas-zoom": canvasZoom / 100, "--canvas-width": `${selectedOutputSize.width}px`, "--canvas-spread-width": `${selectedOutputSize.width * 2 + 2}px` } as CSSProperties}><PreviewPage page={visiblePage} pageNumber={currentPage + 1} totalPages={displayPages.length} title={projectTitle} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} design={design} layout={layout} scrapbookPage={visibleScrapbookState} scrapbookSelectedId={selectedScrapbookElementId} onScrapbookSelect={setSelectedScrapbookElementId} onScrapbookChange={updateScrapbookElement} />{layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" && displayPages[currentPage + 1] && <PreviewPage page={displayPages[currentPage + 1]} pageNumber={currentPage + 2} totalPages={displayPages.length} title={projectTitle} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} design={design} layout={layout} />}</div></div>
+        <div ref={canvasWorkbenchRef} className="canvas-workbench"><div className={`central-preview-stage ${layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" ? "is-spread" : ""}`} style={{ "--canvas-zoom": canvasZoom / 100, "--canvas-width": `${selectedOutputSize.width}px`, "--canvas-spread-width": `${selectedOutputSize.width * 2 + 2}px` } as CSSProperties}><PreviewPage page={visiblePage} pageNumber={currentPage + 1} totalPages={displayPages.length} title={projectTitle} rules={livePreviewRules} mosaicTerms={mosaicTerms} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} design={design} layout={layout} scrapbookPage={visibleScrapbookState} scrapbookSelectedId={selectedScrapbookElementId} onScrapbookSelect={setSelectedScrapbookElementId} onScrapbookChange={updateScrapbookElement} />{layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" && displayPages[currentPage + 1] && <PreviewPage page={displayPages[currentPage + 1]} pageNumber={currentPage + 2} totalPages={displayPages.length} title={projectTitle} rules={livePreviewRules} mosaicTerms={mosaicTerms} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} design={design} layout={layout} />}</div></div>
         <div className="canvas-statusbar"><div className="page-stepper"><button disabled={currentPage <= 0} onClick={() => setCurrentPage((value) => Math.max(0, value - (layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" ? 2 : 1)))}>←</button><span>페이지 {currentPage + 1} / {displayPages.length}</span><button disabled={currentPage >= displayPages.length - 1} onClick={() => setCurrentPage((value) => Math.min(displayPages.length - 1, value + (layout.mode === "classic" && layout.bookFeaturesEnabled && layout.bookView === "spread" ? 2 : 1)))}>→</button></div><div className="canvas-output-status">{canvasOverflow && <b>내용 넘침 · 페이지 분할 또는 여백 조정 필요</b>}<span>출력 {selectedOutputSize.width * design.exportScale} × {selectedOutputSize.height * design.exportScale}px · {design.exportScale}×</span></div></div>
       </section>
       <aside className="right-panel panel-shell"><button className="right-collapse" aria-label={rightCollapsed ? "텍스트 패널 펼치기" : "텍스트 패널 접기"} onClick={() => setRightCollapsed((value) => !value)}>{rightCollapsed ? "‹" : "›"}</button><div className="right-content inspector-content">

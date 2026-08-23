@@ -1,5 +1,5 @@
 export type ParagraphRole = "dialogue" | "narration" | "thought" | "other";
-export type ParagraphPresentation = "line" | "bubble" | "quote";
+export type ParagraphPresentation = "line" | "bubble";
 export type ParagraphLineStyle = "vertical-solid" | "vertical-double" | "vertical-dotted" | "vertical-dashed" | "horizontal-short" | "horizontal-double" | "horizontal-dotted" | "horizontal-dashed";
 
 export type ParagraphMark = {
@@ -12,6 +12,7 @@ export type ParagraphMark = {
   bold?: boolean;
   italic?: boolean;
   presentationColor?: string;
+  bubbleSide?: "left" | "right";
   lineStyle?: ParagraphLineStyle;
   linePosition?: "above" | "below";
 };
@@ -23,7 +24,7 @@ export type ParagraphSlice = {
 };
 
 const paragraphRoles = new Set<ParagraphRole>(["dialogue", "narration", "thought", "other"]);
-const paragraphPresentations = new Set<ParagraphPresentation>(["line", "bubble", "quote"]);
+const paragraphPresentations = new Set<ParagraphPresentation>(["line", "bubble"]);
 const paragraphLineStyles = new Set<ParagraphLineStyle>(["vertical-solid", "vertical-double", "vertical-dotted", "vertical-dashed", "horizontal-short", "horizontal-double", "horizontal-dotted", "horizontal-dashed"]);
 const colorPattern = /^#[0-9a-f]{6}$/i;
 
@@ -62,14 +63,20 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
     const end = Math.max(start, Number(mark?.end));
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
     const role = paragraphRoles.has(mark.role as ParagraphRole) ? mark.role : undefined;
-    const presentation = paragraphPresentations.has(mark.presentation as ParagraphPresentation) ? mark.presentation : undefined;
+    const requestedPresentation = String(mark.presentation || "");
+    const presentation = requestedPresentation === "quote"
+      ? "line"
+      : paragraphPresentations.has(requestedPresentation as ParagraphPresentation)
+        ? requestedPresentation as ParagraphPresentation
+        : undefined;
     const color = colorPattern.test(mark.color || "") ? mark.color : undefined;
     const presentationColor = colorPattern.test(mark.presentationColor || "") ? mark.presentationColor : undefined;
+    const bubbleSide = presentation === "bubble" ? (mark.bubbleSide === "right" ? "right" : "left") : undefined;
     const bold = mark.bold === true ? true : undefined;
     const italic = mark.italic === true ? true : undefined;
     const lineStyle = paragraphLineStyles.has(mark.lineStyle as ParagraphLineStyle) ? verticalizeParagraphLineStyle(mark.lineStyle) : undefined;
     const linePosition = mark.linePosition === "above" || mark.linePosition === "below" ? mark.linePosition : undefined;
-    if (!role && !presentation && !color && !bold && !italic && !presentationColor && !lineStyle && !linePosition) return [];
+    if (!role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
     return [{
       id: mark.id || `paragraph-mark-${index}-${start}`,
       start,
@@ -80,6 +87,7 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
       bold,
       italic,
       presentationColor,
+      bubbleSide,
       lineStyle,
       linePosition,
     }];

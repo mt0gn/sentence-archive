@@ -75,20 +75,22 @@ test("excerpt attribution uses neutral creator terminology and examples", () => 
   assert.match(component, /attributionVisible:\s*false/);
   assert.match(component, /attributionX:\s*50/);
   assert.match(component, /attributionY:\s*84/);
+  assert.match(component, /attributionBarPosition:\s*"between"/);
   assert.match(component, /캐릭터명/);
   assert.match(component, /제작자/);
-  assert.match(component, /플랫폼명/);
   assert.match(component, /placeholder="예: 위해"/);
   assert.match(component, /placeholder="예: wesea"/);
-  assert.match(component, /placeholder="예: site name"/);
+  assert.doesNotMatch(component, /플랫폼명|플랫폼 가로 위치|플랫폼 세로 단차/);
 });
 
-test("excerpt attribution platform can move left of the byline endpoint", () => {
-  assert.match(component, /attributionOffsetVersion:\s*2/);
-  assert.match(component, /attributionGap:\s*value\?\.attributionOffsetVersion === 2 \? clamp\([^\n]*, -400, 400\) : 0/);
-  assert.match(component, /플랫폼 가로 위치[^\n]*type="range" min="-400" max="400" step="1"[^\n]*attributionGap/);
-  assert.match(styles, /\.excerpt-attribution[^}]*display:\s*inline-flex[^}]*flex-direction:\s*column[^}]*align-items:\s*flex-start/s);
-  assert.match(styles, /\.excerpt-attribution strong[^}]*translateX\(var\(--attribution-gap\)\)/s);
+test("excerpt attribution offers a middle bar and a leading bar on one line", () => {
+  assert.match(component, /type AttributionBarPosition = "between" \| "leading"/);
+  assert.match(component, />이름 사이<\/button>/);
+  assert.match(component, />왼쪽 끝<\/button>/);
+  assert.match(component, /bar-\$\{layout\.attributionBarPosition\}/);
+  assert.match(component, /layout\.attributionBarPosition === "leading" && <i/);
+  assert.match(component, /layout\.attributionBarPosition === "between" \? <i[^:]+: <b aria-hidden="true">·<\/b>/);
+  assert.doesNotMatch(styles, /excerpt-attribution strong|attribution-platform-offset-y|attribution-gap/);
 });
 
 test("starter copy demonstrates every supported syntax candidate", () => {
@@ -101,7 +103,7 @@ test("starter copy demonstrates every supported syntax candidate", () => {
 });
 
 test("attribution is rendered above every layout rather than limited by layout mode", () => {
-  assert.match(component, /const showAttribution = layout\.attributionVisible && Boolean\(layout\.attributionCharacter \|\| layout\.attributionCreator \|\| layout\.attributionPlatform\)/);
+  assert.match(component, /const showAttribution = layout\.attributionVisible && Boolean\(layout\.attributionCharacter \|\| layout\.attributionCreator\)/);
   assert.doesNotMatch(component, /showAttribution =[^\n]*\["classic", "bubble"\]\.includes\(layout\.mode\)/);
   assert.match(component, /<\/>}\s*\{showAttribution && <div className="excerpt-attribution">/);
   assert.match(component, /<small>모든 템플릿<\/small>/);
@@ -115,8 +117,9 @@ test("messenger chrome is vertically balanced and uses a send icon", () => {
 });
 
 test("dialogue rules use vertical line styles and per-character assignment", () => {
-  assert.match(component, />강조</);
-  assert.match(component, />인용</);
+  assert.match(component, />강조선</);
+  assert.doesNotMatch(component, /<span className="mini-label">용도<\/span>/);
+  assert.doesNotMatch(component, />인용<\/button>/);
   assert.doesNotMatch(component, /대사강조선|대사 강조선/);
   assert.match(component, /"solid", "double", "dotted", "dashed"/);
   assert.doesNotMatch(component, /getLineOrientation|composeLineStyle/);
@@ -124,8 +127,8 @@ test("dialogue rules use vertical line styles and per-character assignment", () 
   assert.match(component, /vertical-dotted/);
   assert.match(component, /vertical-dashed/);
   assert.match(component, /function verticalizeLineStyle/);
-  assert.match(component, /lineClasses = rule\.presentation === "line" \|\| rule\.presentation === "quote"/);
-  assert.match(component, /메신저 화자 구분/);
+  assert.match(component, /lineClasses = rule\.presentation === "line" \|\| rule\.role === "dialogue"/);
+  assert.match(component, /화자 지정/);
   assert.match(component, /const globalParagraphStart = baseOffset \+ paragraph\.start/);
   assert.match(component, /const assignmentKey = `text:\$\{globalParagraphStart\}`/);
   assert.match(component, /dialogueSpeaker\?\.accentColor/);
@@ -220,16 +223,12 @@ test("the header kicker and movable attribution box are user controlled", () => 
   assert.match(component, /layout\.headerKicker && <span>\{layout\.headerKicker\}<\/span>/);
   assert.match(component, /attributionX: number/);
   assert.match(component, /attributionY: number/);
-  assert.match(component, /attributionGap: number/);
-  assert.match(component, /attributionPlatformOffsetY: number/);
+  assert.match(component, /attributionBarPosition: AttributionBarPosition/);
   assert.match(component, /발췌 정보 박스 위치/);
-  assert.match(component, /플랫폼 가로 위치/);
-  assert.match(component, /플랫폼 세로 단차/);
   assert.match(component, /가로 위치[^\n]*type="range" min="0" max="100"[^\n]*attributionX/);
   assert.match(component, /세로 위치[^\n]*type="range" min="0" max="100"[^\n]*attributionY/);
-  assert.match(styles, /\.excerpt-attribution[^}]*top:\s*var\(--attribution-y\)[^}]*left:\s*var\(--attribution-x\)[^}]*display:\s*inline-flex[^}]*flex-direction:\s*column/s);
-  assert.match(styles, /\.excerpt-attribution strong[^}]*margin-top:\s*var\(--attribution-platform-offset-y\)/s);
-  assert.match(styles, /\.excerpt-attribution strong[^}]*transform:\s*translateX\(var\(--attribution-gap\)\)/s);
+  assert.match(styles, /\.excerpt-attribution[^}]*top:\s*var\(--attribution-y\)[^}]*left:\s*var\(--attribution-x\)/s);
+  assert.match(styles, /\.excerpt-byline[^}]*display:\s*flex[^}]*align-items:\s*center/s);
   assert.match(styles, /transform:\s*translate\(var\(--attribution-shift-x\), var\(--attribution-shift-y\)\)/);
 });
 
@@ -336,7 +335,8 @@ test("basic backgrounds provide dot radial and check modes without paper texture
 
 test("blank-line paragraphs can be manually classified and rendered without speakers", () => {
   assert.match(paragraphBlocks, /export type ParagraphRole = "dialogue" \| "narration" \| "thought" \| "other"/);
-  assert.match(paragraphBlocks, /export type ParagraphPresentation = "line" \| "bubble" \| "quote"/);
+  assert.match(paragraphBlocks, /export type ParagraphPresentation = "line" \| "bubble"/);
+  assert.match(paragraphBlocks, /requestedPresentation === "quote"[\s\S]*?\? "line"/);
   assert.match(paragraphBlocks, /presentationColor\?: string/);
   assert.match(paragraphBlocks, /bold\?: boolean/);
   assert.match(paragraphBlocks, /italic\?: boolean/);
@@ -348,14 +348,23 @@ test("blank-line paragraphs can be manually classified and rendered without spea
   assert.doesNotMatch(component, /형광펜이 최우선이며, 그다음은 선택 문단의 직접 지정 서식입니다/);
   assert.match(component, /미지정 선택/);
   assert.match(component, /서술 사이 선택/);
-  assert.match(component, /applyParagraphMarkPatch\(\{ presentation: "bubble", presentationColor: paragraphStyleDraft\.presentationColor \}\)/);
+  assert.match(component, /function applyParagraphBubbleDraft/);
+  assert.match(component, /applyParagraphMarkPatch\(\{ presentation: "bubble", presentationColor: paragraphStyleDraft\.presentationColor, bubbleSide \}\)/);
   assert.match(component, /paragraphMarks=\{paragraphMarks\}/);
   assert.match(component, /선택 문단에 서식 적용/);
   assert.match(component, /문단 표현 색/);
   assert.match(component, /paragraphMark\?\.presentationColor/);
   assert.doesNotMatch(component, /본문색 따름|기본색 따름|모양 직접 지정/);
   assert.match(styles, /\.preview-copy p\.paragraph-presentation-bubble/);
-  assert.match(styles, /\.preview-copy p\.paragraph-presentation-quote/);
+  assert.match(paragraphBlocks, /bubbleSide\?: "left" \| "right"/);
+  assert.match(component, /standaloneParagraphBubble \? `paragraph-bubble-inline paragraph-bubble-side-\$\{bubbleSide\}`/);
+  assert.match(styles, /paragraph-presentation-bubble\.paragraph-bubble-inline \{[^}]*position:\s*relative;/s);
+  assert.match(styles, /paragraph-bubble-side-left \{[^}]*margin-inline:\s*0 auto;/s);
+  assert.match(styles, /paragraph-bubble-side-right \{[^}]*margin-inline:\s*auto 0;/s);
+  assert.doesNotMatch(styles, /paragraph-bubble-side-(?:left|right)::after/);
+  assert.match(component, />말풍선 위치<\/span>/);
+  assert.doesNotMatch(styles, /\.preview-copy p\.paragraph-presentation-quote/);
+  assert.match(styles, /dialogue-line-vertical-dashed::before \{[^}]*top:\s*0;[^}]*bottom:\s*0;[^}]*height:\s*auto/s);
   assert.match(styles, /\.preview-copy p\.paragraph-is-bold/);
   assert.match(styles, /--paragraph-presentation-color/);
   assert.match(component, /\["bubble", "messenger"\]\.includes\(layout\.mode\) && <div className="control-card dialogue-character-card"/);
@@ -368,8 +377,20 @@ test("every syntax role can request a paragraph presentation", () => {
   assert.doesNotMatch(component, /disabled=\{ruleDraft\.role !== "dialogue"\}/);
   assert.match(component, /const presentationRule = parsedParagraph\.find/);
   assert.match(component, /ruleDraft\.presentation === "bubble"/);
-  assert.match(component, /ruleDraft\.presentation === "quote"/);
+  assert.doesNotMatch(component, /ruleDraft\.presentation === "quote"/);
+  assert.match(component, /requestedPresentation === "quote"[\s\S]*?\? "line"/);
   assert.match(component, /const presentation = paragraphMark\?\.presentation \|\| presentationRule\?\.presentation/);
+});
+
+test("paragraph bubble colors use the selected rule color without speaker or white blending", () => {
+  assert.match(component, /paragraphMark\?\.presentationColor \|\| presentationRule\?\.lineColor \|\| dialogueSpeaker\?\.accentColor/);
+  assert.match(component, /backgroundColor: presentation === "bubble" \? presentationColor : undefined/);
+  assert.match(component, /const livePreviewRules = useMemo/);
+  assert.match(component, /normalizeRule\(\{ \.\.\.rule, \.\.\.ruleDraft \}\)/);
+  assert.match(component, /rules=\{livePreviewRules\}/);
+  assert.match(component, /말풍선 배경[\s\S]*?type="color"[\s\S]*?onInput=\{\(event\) => \{ const lineColor = event\.currentTarget\.value; setRuleDraft\(\(current\) => \(\{ \.\.\.current, lineColor \}\)\); \}\}/);
+  assert.match(styles, /\.preview-copy p\.paragraph-presentation-bubble\s*\{[^}]*background:\s*var\(--paragraph-presentation-color, #6694ea\)/s);
+  assert.doesNotMatch(styles, /paragraph-presentation-bubble[^}]*color-mix/s);
 });
 
 test("saving an inline detected rule restores its candidate card instead of falling through to paragraph review", () => {
@@ -409,4 +430,39 @@ test("global and selected text colors are clearly separated in one compact forma
   assert.match(styles, /\.quick-style-row\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
   assert.match(styles, /\.quick-style-row button:last-child\s*\{[^}]*grid-column:\s*auto/s);
   assert.match(styles, /\.text-color-pair\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/s);
+});
+
+test("body decoration cards follow the user workflow order", () => {
+  const editPanel = component.slice(component.indexOf('if (activeTool === "edit")'), component.indexOf('if (activeTool === "privacy")'));
+  const positions = [
+    editPanel.indexOf('field-label">형광펜'),
+    editPanel.indexOf('field-label">발췌 정보'),
+    editPanel.indexOf('field-label">문단 구분 장식'),
+    editPanel.indexOf('className="control-card free-photo-card"'),
+    editPanel.indexOf('field-label">글자 서식'),
+  ];
+  assert.ok(positions.every((position) => position >= 0));
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+});
+
+test("bubble layout keeps a pointed corner and adds a protruding tail only on request", () => {
+  assert.match(component, /function isDoubleQuotedParagraph\(text: string\)/);
+  assert.match(component, /layout\.mode === "bubble" && isDoubleQuotedParagraph\(text\)/);
+  assert.match(component, /segment\.rule\?\.role === "dialogue"\) \|\| \(layout\.mode === "bubble" && isDoubleQuotedParagraph\(paragraph\.text\)\)/);
+  assert.match(component, /NARRATION_ASSIGNMENT/);
+  assert.match(component, /큰따옴표로 감싼 문단은 첫 화자의 말풍선으로 자동 배치됩니다/);
+  assert.match(component, /모두 미지정·서술/);
+  assert.match(component, /layout\.mode === "messenger" && visiblePage && !visiblePage\.cover/);
+  assert.doesNotMatch(component, /프로필 크기 · %|화자명 크기 · %/);
+  assert.match(styles, /\.layout-bubble \.message-avatar\s*\{[^}]*width:\s*2\.7em[^}]*height:\s*2\.7em[^}]*border-radius:\s*\.78em/s);
+  assert.match(styles, /\.layout-bubble \.message-speaker\s*\{[^}]*margin:\s*0 0 \.35em 0[^}]*font-size:\s*\.82em/s);
+  assert.match(component, />돌출 꼬리<\/label>/);
+  assert.match(styles, /\.layout-bubble \.message-bubble\s*\{[^}]*border-radius:\s*0 var\(--bubble-radius/s);
+  assert.match(styles, /\.layout-bubble \.side-right \.message-bubble\s*\{[^}]*border-radius:\s*var\(--bubble-radius[^}]*\s0\s/s);
+  assert.match(component, /message-line \$\{layout\.showTails \? "has-protruding-tail" : ""\}/);
+  assert.match(styles, /\.layout-bubble \.message-line\.has-protruding-tail\s*\{[^}]*padding-inline-start:\s*\.488em/s);
+  assert.match(styles, /\.layout-bubble \.side-right \.message-line\.has-protruding-tail\s*\{[^}]*padding-inline-start:\s*0[^}]*padding-inline-end:\s*\.488em/s);
+  assert.match(styles, /\.layout-bubble \.message-bubble\.with-tail::before\s*\{[^}]*display:\s*block[^}]*clip-path:\s*polygon\(100% 0, 100% 100%, 0 0\)/s);
+  assert.match(styles, /\.layout-bubble \.side-right \.message-bubble\.with-tail::before\s*\{[^}]*bottom:\s*0[^}]*clip-path:\s*polygon\(0 0, 100% 100%, 0 100%\)/s);
+  assert.match(styles, /\.excerpt-byline i\s*\{[^}]*border-left:\s*1px solid currentColor/s);
 });
