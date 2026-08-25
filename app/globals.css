@@ -589,8 +589,8 @@ input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent);
 .preview-page-number { margin-top: auto; padding-top: var(--text-line); color: color-mix(in srgb, currentColor 62%, transparent); text-align: right; font-size: max(12px, calc(var(--text-size) * .82)); font-weight: 650; letter-spacing: 0.09em; }
 .layout-classic.has-attribution .preview-body, .layout-bubble.has-attribution .preview-body { padding-bottom: calc(var(--text-size) * 5.4); }
 .layout-classic.has-attribution.has-page-number .preview-body, .layout-bubble.has-attribution.has-page-number .preview-body { padding-bottom: calc(var(--text-size) * 7.2); }
-.excerpt-attribution { position: absolute; z-index: 40; top: var(--attribution-y); left: var(--attribution-x); width: max-content; max-width: calc(100% - 24px); font-family: Pretendard, sans-serif; font-size: max(7px, calc(var(--text-size) * .68)); line-height: 1.35; letter-spacing: .025em; text-align: left; transform: translate(var(--attribution-shift-x), var(--attribution-shift-y)); pointer-events: none; }
-.excerpt-byline { min-width: 0; display: flex; align-items: center; gap: .7em; color: color-mix(in srgb, currentColor 58%, transparent); font-weight: 650; white-space: nowrap; }
+.excerpt-attribution { position: absolute; z-index: 40; top: var(--attribution-y); left: var(--attribution-x); width: max-content; max-width: calc(100% - 24px); line-height: 1.35; letter-spacing: .025em; text-align: left; transform: translate(var(--attribution-shift-x), var(--attribution-shift-y)); pointer-events: none; }
+.excerpt-byline { min-width: 0; display: flex; align-items: center; gap: .7em; color: color-mix(in srgb, currentColor 58%, transparent); white-space: nowrap; }
 .excerpt-byline i { flex: 0 0 0; width: 0; height: 1em; border-left: 1px solid currentColor; opacity: .55; }
 .excerpt-byline b { color: color-mix(in srgb, currentColor 48%, transparent); font: inherit; }
 .layout-classic.has-attribution .preview-page-number, .layout-bubble.has-attribution .preview-page-number { position: absolute; z-index: 4; right: var(--padding-right); bottom: var(--padding-bottom); margin: 0; padding: 0; }

@@ -363,6 +363,8 @@ type LayoutSettings = {
   attributionCharacter: string;
   attributionCreator: string;
   attributionBarPosition: AttributionBarPosition;
+  attributionFontId: FontId | "inherit";
+  attributionFontWeight: number;
   attributionX: number;
   attributionY: number;
   mosaicExclusions: MosaicExclusion[];
@@ -686,6 +688,8 @@ const defaultLayout: LayoutSettings = {
   attributionCharacter: "",
   attributionCreator: "",
   attributionBarPosition: "between",
+  attributionFontId: "inherit",
+  attributionFontWeight: 650,
   attributionX: 50,
   attributionY: 84,
   mosaicExclusions: [],
@@ -747,6 +751,8 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
     attributionCharacter: String(value?.attributionCharacter || ""),
     attributionCreator: String(value?.attributionCreator || value?.attributionAuthor || ""),
     attributionBarPosition: value?.attributionBarPosition === "leading" ? "leading" : "between",
+    attributionFontId: normalizeStoredFontId(value?.attributionFontId, "inherit"),
+    attributionFontWeight: ([300, 400, 500, 600, 650, 700, 800] as number[]).includes(Number(value?.attributionFontWeight)) ? Number(value?.attributionFontWeight) : defaultLayout.attributionFontWeight,
     attributionX: clamp(Number(value?.attributionX ?? defaultLayout.attributionX), 0, 100),
     attributionY: clamp(Number(value?.attributionY ?? defaultLayout.attributionY), 0, 100),
     mosaicExclusions: (value?.mosaicExclusions || []).filter((item) => item && typeof item.term === "string" && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start).map((item) => ({ id: item.id || makeId("mosaic-exclusion"), term: item.term, start: Math.max(0, Number(item.start)), end: Math.max(0, Number(item.end)) })),
@@ -1960,6 +1966,13 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
     color: design.textColor,
     textAlign: design.textAlign,
   } as CSSProperties;
+  const attributionTextStyle = {
+    fontFamily: layout.attributionFontId === "inherit" ? font.family : getFontFamily(layout.attributionFontId),
+    fontSize: "max(7px, calc(var(--text-size) * .68))",
+  } as CSSProperties;
+  const attributionBylineStyle = {
+    fontWeight: layout.attributionFontWeight,
+  } as CSSProperties;
   const phoneMessenger = layout.mode === "messenger";
   const bookMode = layout.mode === "classic" && layout.bookFeaturesEnabled;
   const showAttribution = layout.attributionVisible && Boolean(layout.attributionCharacter || layout.attributionCreator);
@@ -1982,7 +1995,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
         {!phoneMessenger && scrapbookPage && scrapbookPage.elements.some((element) => element.kind === "image") && <ScrapbookPreview page={page} pageState={scrapbookPage} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} layout={layout} selectedId={scrapbookSelectedId} editable={Boolean(onScrapbookChange)} onSelect={onScrapbookSelect} onChange={onScrapbookChange} />}
         {hasFooterPageNumber && <div className="preview-page-number">{pageNumberLabel}</div>}
       </>}
-      {showAttribution && <div className="excerpt-attribution"><div className={`excerpt-byline bar-${layout.attributionBarPosition}`}>{layout.attributionBarPosition === "leading" && <i aria-hidden="true" />}{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && (layout.attributionBarPosition === "between" ? <i aria-hidden="true" /> : <b aria-hidden="true">·</b>)}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div></div>}
+      {showAttribution && <div className="excerpt-attribution" style={attributionTextStyle}><div className={`excerpt-byline bar-${layout.attributionBarPosition}`} style={attributionBylineStyle}>{layout.attributionBarPosition === "leading" && <i aria-hidden="true" />}{layout.attributionCharacter && <span>{layout.attributionCharacter}</span>}{layout.attributionCharacter && layout.attributionCreator && (layout.attributionBarPosition === "between" ? <i aria-hidden="true" /> : <b aria-hidden="true">·</b>)}{layout.attributionCreator && <span>{layout.attributionCreator}</span>}</div></div>}
     </div>
   </div>;
 }
@@ -3597,7 +3610,9 @@ export default function QuoteStudio() {
         <label className="check-control wide-check"><input type="checkbox" checked={layout.attributionVisible} onChange={(event) => setLayout((current) => ({ ...current, attributionVisible: event.target.checked }))} />캔버스에 발췌 정보 표시</label>
         <div className="split-fields"><label>캐릭터명<input value={layout.attributionCharacter} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCharacter: event.target.value }))} placeholder="예: 위해" /></label><label>제작자<input value={layout.attributionCreator} maxLength={60} onChange={(event) => setLayout((current) => ({ ...current, attributionCreator: event.target.value }))} placeholder="예: wesea" /></label></div>
         <span className="mini-label">막대 위치</span><div className="two-way-control"><button className={layout.attributionBarPosition === "between" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, attributionBarPosition: "between" }))}>이름 사이</button><button className={layout.attributionBarPosition === "leading" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, attributionBarPosition: "leading" }))}>왼쪽 끝</button></div>
-        <p className="helper-note">캐릭터명과 제작자를 한 줄에 표시합니다. 막대는 두 이름 사이 또는 정보 왼쪽 끝에 둘 수 있습니다.</p>
+        <label>글꼴<select value={layout.attributionFontId} onChange={(event) => setLayout((current) => ({ ...current, attributionFontId: event.target.value as FontId | "inherit" }))}><option value="inherit">본문 글꼴 따름</option>{orderedFonts.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label>
+        <label>글자 굵기<select value={layout.attributionFontWeight} onChange={(event) => setLayout((current) => ({ ...current, attributionFontWeight: Number(event.target.value) }))}><option value="300">가는 글씨 · 300</option><option value="400">보통 · 400</option><option value="500">중간 · 500</option><option value="600">반굵게 · 600</option><option value="650">기본 · 650</option><option value="700">굵게 · 700</option><option value="800">아주 굵게 · 800</option></select></label>
+        <p className="helper-note">캐릭터명과 제작자를 한 줄에 표시합니다. 글꼴과 굵기는 본문과 어울리게 설정할 수 있습니다.</p>
         {layout.attributionVisible && <div className="attribution-position-controls">
           <span className="mini-label">발췌 정보 박스 위치</span>
           <label className="range-label"><span>가로 위치<b>{layout.attributionX}%</b></span><input type="range" min="0" max="100" value={layout.attributionX} onChange={(event) => setLayout((current) => ({ ...current, attributionX: Number(event.target.value) }))} /></label>

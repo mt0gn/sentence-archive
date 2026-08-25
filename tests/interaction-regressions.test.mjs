@@ -93,6 +93,19 @@ test("excerpt attribution offers a middle bar and a leading bar on one line", ()
   assert.doesNotMatch(styles, /excerpt-attribution strong|attribution-platform-offset-y|attribution-gap/);
 });
 
+test("excerpt attribution supports independent typography while following the body font by default", () => {
+  assert.match(component, /attributionFontId:\s*"inherit"/);
+  assert.match(component, /attributionFontWeight:\s*650/);
+  assert.match(component, /<option value="inherit">본문 글꼴 따름<\/option>/);
+  assert.match(component, /글자 굵기<select value=\{layout\.attributionFontWeight\}/);
+  assert.doesNotMatch(component, /attributionFontScale/);
+  assert.match(component, /const attributionTextStyle = \{[\s\S]*fontFamily:[\s\S]*fontSize: "max\(7px, calc\(var\(--text-size\) \* \.68\)\)"/);
+  assert.match(component, /const attributionBylineStyle = \{[\s\S]*fontWeight: layout\.attributionFontWeight/);
+  assert.match(component, /className="excerpt-attribution" style=\{attributionTextStyle\}/);
+  assert.match(component, /className=\{`excerpt-byline bar-\$\{layout\.attributionBarPosition\}`\} style=\{attributionBylineStyle\}/);
+  assert.doesNotMatch(styles, /--attribution-font(?:-scale|-weight)?/);
+});
+
 test("starter copy demonstrates every supported syntax candidate", () => {
   assert.match(component, /\*기울임 구문은 장면과 서술을 표시합니다\.\*/);
   assert.match(component, /\*\*굵은 구문은 강조하고 싶은 문장을 표시합니다\.\*\*/);
@@ -105,7 +118,7 @@ test("starter copy demonstrates every supported syntax candidate", () => {
 test("attribution is rendered above every layout rather than limited by layout mode", () => {
   assert.match(component, /const showAttribution = layout\.attributionVisible && Boolean\(layout\.attributionCharacter \|\| layout\.attributionCreator\)/);
   assert.doesNotMatch(component, /showAttribution =[^\n]*\["classic", "bubble"\]\.includes\(layout\.mode\)/);
-  assert.match(component, /<\/>}\s*\{showAttribution && <div className="excerpt-attribution">/);
+  assert.match(component, /<\/>}\s*\{showAttribution && <div className="excerpt-attribution" style=\{attributionTextStyle\}>/);
   assert.match(component, /<small>모든 템플릿<\/small>/);
 });
 
