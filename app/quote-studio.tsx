@@ -65,7 +65,7 @@ type ParagraphMarkPatch = {
 type ManuscriptMode = "horizontal" | "vertical";
 type ManuscriptTemplate = "horizontal" | "vertical";
 type ManuscriptDirection = "ltr" | "rtl";
-type MessengerStyle = "kakao" | "dm";
+type MessengerStyle = "kakao" | "dm" | "imessage";
 type NotebookPattern = "line" | "grid" | "dot";
 type ScrapbookFrameStyle = "none" | "paper" | "outline" | "note" | "polaroid" | "grid" | "film";
 type WrapMode = "normal" | "keep-all" | "break-all";
@@ -296,6 +296,12 @@ type LayoutSettings = {
   bubblePaddingY: number;
   messageGap: number;
   messengerStyle: MessengerStyle;
+  messengerSizing: "content" | "phone" | "custom";
+  messengerWidth: number;
+  messengerHeight: number;
+  messengerShowHeader: boolean;
+  messengerShowComposer: boolean;
+  messengerShowNavigation: boolean;
   dmTheme: "light" | "dark";
   chatTitle: string;
   chatSubtitle: string;
@@ -469,7 +475,7 @@ const layoutTemplates: Array<{ id: LayoutMode; label: string; description: strin
   { id: "microfilm", label: "마이크로필름", description: "필름 프레임과 스트립" },
   { id: "webcore", label: "웹코어", description: "고전 창과 메모장" },
   { id: "bubble", label: "말풍선", description: "캐릭터 대화 카드" },
-  { id: "messenger", label: "메신저", description: "카카오톡과 DM" },
+  { id: "messenger", label: "메신저", description: "카카오톡 · DM · 아이메시지" },
 ];
 
 const textLineStyleOptions: Array<{ value: TextLineStyle; label: string }> = [
@@ -621,6 +627,12 @@ const defaultLayout: LayoutSettings = {
   bubblePaddingY: 10,
   messageGap: 10,
   messengerStyle: "kakao",
+  messengerSizing: "content",
+  messengerWidth: 540,
+  messengerHeight: 960,
+  messengerShowHeader: true,
+  messengerShowComposer: true,
+  messengerShowNavigation: true,
   dmTheme: "light",
   chatTitle: "대화",
   chatSubtitle: "",
@@ -727,7 +739,15 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
     ...defaultLayout,
     ...sanitizedValue,
     mode,
-    messengerStyle: legacyMode === "dm" ? "dm" : legacyMode === "kakao" ? "kakao" : value?.messengerStyle === "dm" ? "dm" : "kakao",
+    messengerStyle: legacyMode === "dm" ? "dm" : legacyMode === "kakao" ? "kakao" : value?.messengerStyle === "imessage" ? "imessage" : value?.messengerStyle === "dm" ? "dm" : "kakao",
+    messengerSizing: value?.messengerSizing === "content" || value?.messengerSizing === "phone" || value?.messengerSizing === "custom"
+      ? value.messengerSizing
+      : value && ["messenger", "kakao", "dm"].includes(String(value.mode)) ? "phone" : "content",
+    messengerWidth: normalizeMessengerDimension(value?.messengerWidth, 540, MAX_CANVAS_WIDTH),
+    messengerHeight: normalizeMessengerDimension(value?.messengerHeight, 960, MAX_CANVAS_HEIGHT),
+    messengerShowHeader: value?.messengerShowHeader !== false,
+    messengerShowComposer: value?.messengerShowComposer !== false,
+    messengerShowNavigation: value?.messengerShowNavigation !== false,
     manuscriptMode: value?.manuscriptMode === "vertical" || value?.manuscriptTemplate === "vertical" ? "vertical" : "horizontal",
     manuscriptTemplate: value?.manuscriptMode === "vertical" || value?.manuscriptTemplate === "vertical" ? "vertical" : "horizontal",
     manuscriptDirection: value?.manuscriptDirection === "rtl" ? "rtl" : value?.manuscriptDirection === "ltr" ? "ltr" : value?.manuscriptMode === "vertical" || value?.manuscriptTemplate === "vertical" ? "rtl" : "ltr",
@@ -1512,12 +1532,28 @@ function parseRatio(ratio: string) {
   return width > 0 && height > 0 ? width / height : 4 / 5;
 }
 
+function normalizeMessengerDimension(value: unknown, fallback: number, maximum: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? clamp(Math.round(parsed), MIN_CANVAS_SIZE, maximum) : fallback;
+}
+
+function getMessengerChrome(layout: LayoutSettings, width: number) {
+  const scale = width / 540;
+  const imessage = layout.messengerStyle === "imessage";
+  const showHeader = layout.messengerShowHeader !== false;
+  const composer = layout.messengerShowComposer !== false;
+  const navigation = layout.messengerShowNavigation !== false;
+  const bottom = composer ? navigation ? (imessage ? 100 : 150) : (imessage ? 84 : 90) : navigation ? (imessage ? 26 : 70) : 0;
+  return { status: showHeader ? 44 * scale : 0, header: showHeader ? (imessage ? 92 : 82) * scale : 0, bottom: bottom * scale };
+}
+
 function getOutputSize(design: DesignSettings, layout: LayoutSettings): OutputSize {
   let output: OutputSize;
   if (layout.mode === "messenger") {
-    output = design.surfaceSize === "banner"
-      ? { width: 540, height: 1170, label: layout.messengerStyle === "kakao" ? "카톡 긴 화면" : "DM 긴 화면", fixed: true }
-      : { width: 540, height: 960, label: layout.messengerStyle === "kakao" ? "카톡 휴대폰 캡처" : "DM 휴대폰 캡처", fixed: true };
+    const label = layout.messengerStyle === "kakao" ? "카카오톡" : layout.messengerStyle === "imessage" ? "아이메시지" : "DM";
+    output = layout.messengerSizing === "phone"
+      ? { width: 540, height: design.surfaceSize === "banner" ? 1170 : 960, label: label + " 휴대폰 규격", fixed: true }
+      : { width: normalizeMessengerDimension(layout.messengerWidth, 540, MAX_CANVAS_WIDTH), height: normalizeMessengerDimension(layout.messengerHeight, 960, MAX_CANVAS_HEIGHT), label: label + (layout.messengerSizing === "custom" ? " 직접 지정" : " 내용에 맞춤"), fixed: false };
   } else if (layout.mode === "manuscript") {
     output = {
       width: clamp(Math.round(design.canvasWidth), MIN_CANVAS_SIZE, MAX_CANVAS_WIDTH),
@@ -1561,7 +1597,7 @@ function getOutputSize(design: DesignSettings, layout: LayoutSettings): OutputSi
       fixed: false,
     };
   }
-  return layout.rotateOutput
+  return layout.rotateOutput && !(layout.mode === "messenger" && layout.messengerSizing === "content")
     ? { ...output, width: output.height, height: output.width, label: `${output.label} · 방향 전환` }
     : output;
 }
@@ -1758,7 +1794,7 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
     const speaker = layout.speakers.find((item) => item.id === block.messageSpeakerId) || layout.speakers[0];
     if (!speaker || !block.src) return renderFlowBlock(block);
     const metaNode = ((layout.showTime && block.time) || (layout.showReadStatus && block.readStatus)) ? <small className="message-meta">{layout.showReadStatus && block.readStatus && <span>{block.readStatus}</span>}{layout.showTime && block.time && <span>{formatMessageTime(block.time)}</span>}</small> : null;
-    const fixedBubbleColor = layout.mode === "messenger" && layout.messengerStyle === "kakao" ? (speaker.side === "right" ? "#fee500" : "#ffffff") : layout.mode === "messenger" && layout.messengerStyle === "dm" ? (speaker.side === "right" ? "#a855d4" : layout.dmTheme === "dark" ? "#26262b" : "#ffffff") : speaker.color;
+    const fixedBubbleColor = layout.mode === "messenger" ? getMessengerBubbleColor(layout.messengerStyle, speaker.side, layout.dmTheme) : speaker.color;
     return <div className={`message-row side-${speaker.side} is-photo-only`} key={block.id}>
       {layout.showAvatars && speaker.side === "left" && <div className="message-avatar" style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1)}</div>}
       <div className="message-stack">
@@ -1781,16 +1817,20 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
     const previousParagraph = paragraphs[index - 1];
     const previousGlobalKey = previousParagraph ? `text:${page.startOffset + previousParagraph.start}` : "";
     const previous = index > 0 && previousParagraph ? layout.speakers.find((item) => item.id === resolveMessageSpeakerId(layout, previousParagraph.text, previousGlobalKey, `${page.id}:${index - 1}`)) : null;
+    const nextParagraph = paragraphs[index + 1];
+    const nextSpeakerId = nextParagraph ? resolveMessageSpeakerId(layout, nextParagraph.text, `text:${page.startOffset + nextParagraph.start}`, `${page.id}:${index + 1}`) : "";
+    const groupedBefore = previous?.id === speaker.id && dueBlocks.length === 0;
+    const groupedAfter = nextSpeakerId === speaker.id && !pageBlocks.some((block) => nextParagraph && block.anchor > page.startOffset + paragraph.start && block.anchor <= page.startOffset + nextParagraph.start);
     const hideAvatar = layout.compactAvatars && previous?.id === speaker.id;
     const meta = layout.messageMeta[assignmentKey] || { time: "", readStatus: "" };
     const metaNode = ((layout.showTime && meta.time) || (layout.showReadStatus && meta.readStatus)) ? <small className="message-meta">{layout.showReadStatus && meta.readStatus && <span>{meta.readStatus}</span>}{layout.showTime && meta.time && <span>{formatMessageTime(meta.time)}</span>}</small> : null;
-    const fixedBubbleColor = layout.mode === "messenger" && layout.messengerStyle === "kakao" ? (speaker.side === "right" ? "#fee500" : "#ffffff") : layout.mode === "messenger" && layout.messengerStyle === "dm" ? (speaker.side === "right" ? "#a855d4" : layout.dmTheme === "dark" ? "#26262b" : "#ffffff") : speaker.color;
+    const fixedBubbleColor = layout.mode === "messenger" ? getMessengerBubbleColor(layout.messengerStyle, speaker.side, layout.dmTheme) : speaker.color;
     const fixedTextColor = layout.mode === "messenger" && layout.messengerStyle === "kakao"
       ? "#171719"
       : layout.mode === "messenger" && layout.messengerStyle === "dm"
         ? (speaker.side === "right" ? "#ffffff" : layout.dmTheme === "dark" ? "#f4f4f6" : "#171719")
-        : "var(--preview-text)";
-    return [...photoMessages, ...before, <div className={`message-row side-${speaker.side}`} key={assignmentKey}>
+        : layout.mode === "messenger" && layout.messengerStyle === "imessage" ? (speaker.side === "right" ? "#ffffff" : "#171719") : "var(--preview-text)";
+    return [...photoMessages, ...before, <div className={`message-row side-${speaker.side}${groupedBefore ? " grouped-before" : ""}${groupedAfter ? " grouped-after" : ""}`} key={assignmentKey}>
       {layout.showAvatars && speaker.side === "left" && <div className={`message-avatar ${hideAvatar ? "is-placeholder" : ""}`} style={layout.mode === "bubble" ? { backgroundColor: speaker.color, color: speaker.accentColor } : undefined}>{!hideAvatar && (speaker.avatar ? <img src={speaker.avatar} alt="" /> : layout.mode === "bubble" ? null : speaker.name.slice(0, 1))}</div>}
       <div className="message-stack">
         {layout.showSpeakerNames && !hideAvatar && (speaker.side === "left" || layout.mode === "bubble") && <span className="message-speaker" style={layout.mode === "bubble" ? { color: speaker.accentColor } : undefined}>{speaker.name}</span>}
@@ -1803,25 +1843,64 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
   return <div className="message-thread" style={threadStyle}>{nodes}</div>;
 }
 
-function MessengerPreview({ page, rules, mosaicTerms, layout, directMarks, flowBlocks }: { page: PageItem; rules: SyntaxRule[]; mosaicTerms: string[]; layout: LayoutSettings; directMarks: DirectTextMark[]; flowBlocks: FlowBlock[] }) {
+function getMessengerBubbleColor(style: MessengerStyle, side: SpeakerSide, theme: "light" | "dark") {
+  if (style === "imessage") return side === "right" ? "#168aff" : "#e9e9eb";
+  if (style === "dm") return side === "right" ? "#7040ee" : theme === "dark" ? "#26262b" : "#efefef";
+  return side === "right" ? "#fee500" : "#ffffff";
+}
+
+type MessengerIconName = "back" | "search" | "phone" | "video" | "menu" | "plus" | "smile" | "camera" | "mic" | "image" | "sticker" | "hash" | "up";
+function MessengerIcon({ name }: { name: MessengerIconName }) {
+  const paths: Record<MessengerIconName, ReactNode> = {
+    back: <path d="m14 5-7 7 7 7M7 12h15" />,
+    search: <><circle cx="10.5" cy="10.5" r="7.5" /><path d="m16 16 6 6" /></>,
+    phone: <path d="M7 3 3.5 5c-2 5 10.5 17.5 15.5 15.5l2-3.5-5-3-2 2C10.5 14.5 9.5 13.5 8 10l2-2-3-5Z" />,
+    video: <><rect x="2" y="5" width="14" height="14" rx="3" /><path d="m16 9 6-4v14l-6-4" /></>,
+    menu: <path d="M3 5h18M3 12h18M3 19h18" />,
+    plus: <path d="M12 4v16M4 12h16" />,
+    smile: <><circle cx="12" cy="12" r="9" /><path d="M8 14c2 4 6 4 8 0M8 8.5v1M16 8.5v1" /></>,
+    camera: <><path d="M3 6h4l2-3h6l2 3h4v15H3Z" /><circle cx="12" cy="13" r="5" /></>,
+    mic: <><rect x="9" y="2" width="6" height="13" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></>,
+    image: <><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1" /><path d="m3 17 6-6 4 4 3-3 5 6" /></>,
+    sticker: <><path d="M21 14V7a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h7l7-7Zm0 0h-4a3 3 0 0 0-3 3v4" /><path d="M8 9h.1M15 9h.1M8 14q3 3 6 0" /></>,
+    hash: <path d="M9 3 6 21M18 3l-3 18M3 9h19M2 16h19" />,
+    up: <path d="M12 21V3m-7 7 7-7 7 7" />,
+  };
+  return <svg className="messenger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
+function MessengerPreview({ page, rules, mosaicTerms, layout, directMarks, flowBlocks, width }: { page: PageItem; rules: SyntaxRule[]; mosaicTerms: string[]; layout: LayoutSettings; directMarks: DirectTextMark[]; flowBlocks: FlowBlock[]; width: number }) {
   const isDm = layout.messengerStyle === "dm";
+  const isIMessage = layout.messengerStyle === "imessage";
   const title = layout.chatTitle.trim() || layout.speakers.map((speaker) => speaker.name).filter(Boolean).join(", ") || "대화";
   const leadSpeaker = layout.speakers[0];
-  return <div className={`messenger-shell ${isDm ? `is-dm theme-${layout.dmTheme}` : "is-kakao"}`}>
-    <div className="messenger-status-bar"><b>{(layout.statusBarTime || "09:41").replace(/^0/, "")}</b><span aria-hidden="true">●●● ᯤ ▰</span></div>
+  const avatar = <div className="messenger-title-avatar">{leadSpeaker?.avatar ? <img src={leadSpeaker.avatar} alt="" /> : leadSpeaker?.name.slice(0, 1) || "Q"}</div>;
+  const placeholder = isIMessage && (!layout.chatComposerText || layout.chatComposerText === "메시지 보내기") ? "iMessage" : layout.chatComposerText || "메시지 보내기";
+  const chrome = getMessengerChrome(layout, width);
+  const contentFit = layout.messengerSizing === "content";
+  return <div className={`messenger-shell ${isDm ? `is-dm theme-${layout.dmTheme}` : isIMessage ? "is-imessage" : "is-kakao"}${layout.messengerShowHeader === false ? " no-messenger-header" : ""}${layout.messengerShowComposer === false ? " no-messenger-composer" : ""}${layout.messengerShowNavigation === false ? " no-messenger-navigation" : ""}`} style={{ gridTemplateRows: `${chrome.status}px ${chrome.header}px ${contentFit ? "auto" : "minmax(0, 1fr)"} ${chrome.bottom}px` }}>
+    <div className="messenger-status-bar"><b>{(layout.statusBarTime || "09:41").replace(/^0/, "")}</b><svg className="messenger-status-icons" viewBox="0 0 78 20" fill="currentColor" aria-hidden="true"><path d="M1 15h4v4H1zm6-4h4v8H7zm6-4h4v12h-4zm6-4h4v16h-4z" /><path d="M30 7q10-10 20 0l-2 2q-8-8-16 0Zm4 4q6-6 12 0l-2 2q-4-4-8 0Zm4 4q2-2 4 0l-2 3Z" /><rect x="56" y="4" width="18" height="12" rx="3" fill="none" stroke="currentColor" strokeWidth="1.5" /><rect x="58" y="6" width="14" height="8" rx="1" /><path d="M76 8h2v4h-2z" /></svg></div>
     <div className="messenger-app-bar">
-      <span className="messenger-back" aria-hidden="true">‹</span>
-      {isDm && <div className="messenger-title-avatar">{leadSpeaker?.avatar ? <img src={leadSpeaker.avatar} alt="" /> : leadSpeaker?.name.slice(0, 1) || "Q"}</div>}
-      <div className="messenger-title"><b>{title}</b>{layout.chatSubtitle && <small>{layout.chatSubtitle}</small>}</div>
-      <div className="messenger-actions" aria-hidden="true">{isDm ? <><span>⌕</span><span>ⓘ</span></> : <><span>⌕</span><span>☰</span></>}</div>
+      <span className="messenger-back"><MessengerIcon name="back" /></span>
+      {isDm && avatar}
+      <div className="messenger-title">{isIMessage && layout.showAvatars && avatar}<b>{title}</b>{layout.chatSubtitle && <small>{layout.chatSubtitle}</small>}</div>
+      <div className="messenger-actions">{!isDm && !isIMessage && <MessengerIcon name="search" />}{!isIMessage && <MessengerIcon name="phone" />}<MessengerIcon name={isDm || isIMessage ? "video" : "menu"} /></div>
     </div>
     <div className="messenger-chat-area">
       {layout.chatDate && <div className="message-date-divider">{layout.chatDate}</div>}
       <MessagePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} />
     </div>
-    <div className="messenger-composer" aria-hidden="true"><span>＋</span><i>{layout.chatComposerText || "메시지 보내기"}</i><b className="messenger-send"><svg viewBox="0 0 24 24"><path d="M3.4 3.2 21 12 3.4 20.8l2.2-7.1L14 12l-8.4-1.7-2.2-7.1Z" /></svg></b></div>
+    <div className="messenger-bottom" aria-hidden="true">
+      <div className="messenger-composer">
+        <span className="composer-leading"><MessengerIcon name={isDm ? "camera" : "plus"} /></span>
+        <span className="composer-placeholder">{placeholder}</span>
+        <span className="composer-tools">{isDm ? <><MessengerIcon name="mic" /><MessengerIcon name="image" /><MessengerIcon name="sticker" /><MessengerIcon name="plus" /></> : isIMessage ? <><MessengerIcon name="mic" /><span className="imessage-send"><MessengerIcon name="up" /></span></> : <><MessengerIcon name="smile" /><MessengerIcon name="hash" /></>}</span>
+      </div>
+      <div className="messenger-system-nav">{isIMessage ? <i className="home-indicator" /> : <>{["recents", "home", "back"].map((name) => <span className="system-nav-slot" key={name}><svg className={`system-nav-icon system-${name}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{name === "recents" ? <path d="M5 4v16M12 4v16M19 4v16" /> : name === "home" ? <rect x="4" y="4" width="16" height="16" rx="5.5" /> : <path d="m15 4-8 8 8 8" />}</svg></span>)}</>}</div>
+    </div>
   </div>;
 }
+
 
 function ScrapbookPreview({ page, pageState, rules, mosaicTerms, directMarks = [], layout, selectedId, editable = false, onSelect, onChange }: {
   page: PageItem;
@@ -1931,12 +2010,14 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
 }) {
   const font = fontOptions.find((option) => option.id === design.fontId) ?? fontOptions[0];
   const outputSize = getOutputSize(design, layout);
+  const contentFit = layout.mode === "messenger" && layout.messengerSizing === "content";
   const manuscriptShape = getManuscriptShape(design);
   const effectiveBackgroundMode = design.backgroundMode;
   const style = {
     ...backgroundStyle(design),
-    aspectRatio: `${outputSize.width} / ${outputSize.height}`,
-    ...(fixedSize ? { width: `${outputSize.width}px`, height: `${outputSize.height}px` } : {}),
+    aspectRatio: contentFit ? "auto" : `${outputSize.width} / ${outputSize.height}`,
+    ...(fixedSize ? { width: `${outputSize.width}px`, height: contentFit ? "auto" : `${outputSize.height}px` } : {}),
+    "--messenger-scale": outputSize.width / 540,
     "--preview-font": font.family,
     "--preview-text": design.textColor,
     "--text-size": `${design.fontSize}px`,
@@ -1977,7 +2058,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
   const bookMode = layout.mode === "classic" && layout.bookFeaturesEnabled;
   const showAttribution = layout.attributionVisible && Boolean(layout.attributionCharacter || layout.attributionCreator);
   const hasFooterPageNumber = !["manuscript", "document"].includes(layout.mode) && (design.showPageNumber || bookMode);
-  const layoutClass = phoneMessenger ? `layout-messenger layout-${layout.messengerStyle}` : `layout-${layout.mode}`;
+  const layoutClass = phoneMessenger ? `layout-messenger layout-${layout.messengerStyle}${contentFit ? " messenger-content-fit" : ""}` : `layout-${layout.mode}`;
   const pageTitle = layout.pageTitleOverrides[page.id] || layout.pageTitle || title || "제목 없는 발췌";
   const pageNumberLabel = layout.pageNumberOverrides[page.id] || formatPageNumberPattern(layout.pageNumberPattern, pageNumber, totalPages);
 
@@ -1990,7 +2071,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
         {design.showHeader && ["classic", "bubble"].includes(layout.mode) && <div className="preview-heading">{layout.headerKicker && <span>{layout.headerKicker}</span>}<b>{pageTitle}</b></div>}
         <div className="preview-body">
           {bookMode && layout.chapterTitle && <div className="book-chapter"><small>CHAPTER</small><h3>{layout.chapterTitle}</h3></div>}
-          {layout.mode === "manuscript" ? <ManuscriptPreview page={page} rules={rules} mosaicTerms={mosaicTerms} columns={manuscriptShape.columns} rows={manuscriptShape.rows} title={title} pageNumber={pageNumber} surface={design.surfaceSize} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "notebook" ? <NotebookPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "microfilm" ? <MicrofilmPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "document" ? <DocumentPreview page={page} pageNumber={pageNumber} totalPages={totalPages} title={title} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "webcore" ? <WebcorePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : phoneMessenger ? <MessengerPreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "bubble" ? <MessagePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : <PreviewText text={page.text} rules={rules} mosaicTerms={mosaicTerms} paragraphIndent={bookMode && layout.paragraphIndent} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} baseOffset={page.startOffset} layout={layout} />}
+          {layout.mode === "manuscript" ? <ManuscriptPreview page={page} rules={rules} mosaicTerms={mosaicTerms} columns={manuscriptShape.columns} rows={manuscriptShape.rows} title={title} pageNumber={pageNumber} surface={design.surfaceSize} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "notebook" ? <NotebookPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "microfilm" ? <MicrofilmPreview page={page} pageNumber={pageNumber} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "document" ? <DocumentPreview page={page} pageNumber={pageNumber} totalPages={totalPages} title={title} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : layout.mode === "webcore" ? <WebcorePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} /> : phoneMessenger ? <MessengerPreview width={outputSize.width} page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : layout.mode === "bubble" ? <MessagePreview page={page} rules={rules} mosaicTerms={mosaicTerms} layout={layout} directMarks={directMarks} flowBlocks={flowBlocks} /> : <PreviewText text={page.text} rules={rules} mosaicTerms={mosaicTerms} paragraphIndent={bookMode && layout.paragraphIndent} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} baseOffset={page.startOffset} layout={layout} />}
         </div>
         {!phoneMessenger && scrapbookPage && scrapbookPage.elements.some((element) => element.kind === "image") && <ScrapbookPreview page={page} pageState={scrapbookPage} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} layout={layout} selectedId={scrapbookSelectedId} editable={Boolean(onScrapbookChange)} onSelect={onScrapbookSelect} onChange={onScrapbookChange} />}
         {hasFooterPageNumber && <div className="preview-page-number">{pageNumberLabel}</div>}
@@ -2048,6 +2129,7 @@ export default function QuoteStudio() {
   const [canvasWidthInput, setCanvasWidthInput] = useState(String(starterProject.design.canvasWidth));
   const [canvasHeightInput, setCanvasHeightInput] = useState(String(starterProject.design.canvasHeight));
   const [canvasOverflow, setCanvasOverflow] = useState(false);
+  const [contentPageHeights, setContentPageHeights] = useState<Record<string, number>>({});
   const [historyAvailability, setHistoryAvailability] = useState({ undo: false, redo: false });
   const accent = UI_ACCENT;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2125,19 +2207,21 @@ export default function QuoteStudio() {
   }), [draft, paragraphMarks, rules]);
   const conflictCount = useMemo(() => countRuleConflicts(draft, rules), [draft, rules]);
   const htmlCount = useMemo(() => countMatches(source, /<\/?[a-z][^>]*>/gi), [source]);
-  const selectedOutputSize = useMemo(() => getOutputSize(design, layout), [design, layout]);
+  const baseOutputSize = useMemo(() => getOutputSize(design, layout), [design, layout]);
+  const messengerContentFit = layout.mode === "messenger" && layout.messengerSizing === "content";
   const estimatedPageCapacity = useMemo(() => estimateCanvasCapacity(design, layout), [design, layout]);
   const contentPages = useMemo(() => {
     const manuscript = layout.mode === "manuscript";
     const shape = getManuscriptShape(design);
     const automaticCapacity = layout.paginationBasis === "canvas" ? estimatedPageCapacity : layout.pageCapacity;
-    return paginateText(draft, layout.autoPaginate || manuscript, manuscript ? shape.columns * shape.rows : automaticCapacity);
-  }, [draft, design, estimatedPageCapacity, layout.autoPaginate, layout.mode, layout.pageCapacity, layout.paginationBasis]);
+    return paginateText(draft, (layout.autoPaginate && !messengerContentFit) || manuscript, manuscript ? shape.columns * shape.rows : automaticCapacity);
+  }, [draft, design, estimatedPageCapacity, layout.autoPaginate, layout.mode, layout.pageCapacity, layout.paginationBasis, messengerContentFit]);
   const displayPages = useMemo<PageItem[]>(() => {
     if (layout.mode === "classic" && layout.bookFeaturesEnabled && layout.showCover) return [{ id: "book-cover", text: "", sourceIndex: -1, startOffset: 0, cover: true }, ...contentPages];
     return contentPages;
   }, [contentPages, layout.bookFeaturesEnabled, layout.mode, layout.showCover]);
   const visiblePage = displayPages[currentPage] ?? displayPages[0];
+  const selectedOutputSize = messengerContentFit ? { ...baseOutputSize, height: contentPageHeights[visiblePage.id] ?? baseOutputSize.height } : baseOutputSize;
   const visibleParagraphs = useMemo(() => visiblePage && !visiblePage.cover ? splitParagraphsWithOffsets(visiblePage.text) : [], [visiblePage]);
   const visibleScrapbookState = useMemo(() => visiblePage ? getScrapbookPageState(scrapbookPages, visiblePage, layout.mode) : undefined, [visiblePage, scrapbookPages, layout.mode]);
   const visibleScrapbookElements = useMemo(() => {
@@ -2401,6 +2485,21 @@ export default function QuoteStudio() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
+
+  useEffect(() => {
+    if (!messengerContentFit) return;
+    let cancelled = false;
+    const measure = () => {
+      if (cancelled) return;
+      const heights = Object.fromEntries(displayPages.map((page) => [page.id, Math.ceil(exportRefs.current[page.id]?.getBoundingClientRect().height || 0)]));
+      setContentPageHeights((current) => Object.keys(heights).every((id) => current[id] === heights[id]) && Object.keys(current).length === Object.keys(heights).length ? current : heights);
+    };
+    const observer = new ResizeObserver(measure);
+    displayPages.forEach((page) => { const node = exportRefs.current[page.id]; if (node) observer.observe(node); });
+    measure();
+    void document.fonts.ready.then(measure);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [messengerContentFit, displayPages, fingerprint]);
 
   useEffect(() => {
     if (canvasFitMode === "custom") return;
@@ -3352,7 +3451,10 @@ export default function QuoteStudio() {
     const { toCanvas } = await import("html-to-image");
     await document.fonts.ready;
     const fontEmbedCSS = await getExportFontCss();
+    await Promise.all(Array.from(node.querySelectorAll("img")).map((image) => image.decode().catch(() => undefined)));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const canvas = await toCanvas(node, {
+      ...(messengerContentFit ? { width: Math.ceil(node.getBoundingClientRect().width), height: Math.ceil(node.getBoundingClientRect().height) } : {}),
       cacheBust: true,
       pixelRatio: design.exportScale,
       backgroundColor: design.backgroundMode === "solid" ? design.solidColor : undefined,
@@ -3474,8 +3576,18 @@ export default function QuoteStudio() {
 
   function renderOutputSizeControl() {
     const fixedMessenger = layout.mode === "messenger";
+    if (fixedMessenger) return <div className="control-card output-size-card">
+      <span className="field-label">결과물 규격</span>
+      <div className="three-way-control">{(["content", "phone", "custom"] as const).map((mode) => <button key={mode} className={layout.messengerSizing === mode ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerSizing: mode, rotateOutput: false }))}>{mode === "content" ? "내용에 맞춤" : mode === "phone" ? "휴대폰 규격" : "직접 지정"}</button>)}</div>
+      {layout.messengerSizing === "phone" ? <div className="two-way-control"><button className={design.surfaceSize === "standard" ? "is-selected" : ""} onClick={() => setDesign((current) => ({ ...current, surfaceSize: "standard" }))}>540×960</button><button className={design.surfaceSize === "banner" ? "is-selected" : ""} onClick={() => setDesign((current) => ({ ...current, surfaceSize: "banner" }))}>540×1170</button></div> : <div className="split-fields">
+        <label>메신저 너비 · px<input type="number" min={MIN_CANVAS_SIZE} max={MAX_CANVAS_WIDTH} value={layout.messengerWidth} onChange={(event) => setLayout((current) => ({ ...current, messengerWidth: normalizeMessengerDimension(event.target.value, current.messengerWidth, MAX_CANVAS_WIDTH) }))} /></label>
+        {layout.messengerSizing === "custom" && <label>메신저 높이 · px<input type="number" min={MIN_CANVAS_SIZE} max={MAX_CANVAS_HEIGHT} value={layout.messengerHeight} onChange={(event) => setLayout((current) => ({ ...current, messengerHeight: normalizeMessengerDimension(event.target.value, current.messengerHeight, MAX_CANVAS_HEIGHT) }))} /></label>}
+      </div>}
+      {layout.messengerSizing === "content" && <p className="helper-note">본문과 이미지에 맞춰 높이가 자동으로 늘어납니다. 수동 페이지 나누기는 유지됩니다.</p>}
+      <div className="fixed-size-notice"><b>{selectedOutputSize.label}</b><span>{selectedOutputSize.width} × {selectedOutputSize.height}px · 저장 {selectedOutputSize.width * design.exportScale} × {selectedOutputSize.height * design.exportScale}px</span></div>
+    </div>;
     return <div className="control-card output-size-card"><div className="history-heading"><span className="field-label">결과물 규격</span><small>템플릿과 함께 설정</small></div>
-      {fixedMessenger ? <div className="fixed-size-notice"><b>{selectedOutputSize.label}</b><span>{selectedOutputSize.width} × {selectedOutputSize.height}px · 메신저 화면 설정에서 변경</span></div> : <>
+      {<>
         <label>페이지 비율<select value={design.ratio} onChange={(event) => event.target.value !== "custom" && applyCanvasRatio(event.target.value)}><option value="1 / 1">1:1</option><option value="4 / 5">4:5</option><option value="3 / 4">3:4</option><option value="2 / 3">2:3</option><option value="16 / 9">16:9</option><option value="9 / 16">9:16</option><option value="9 / 20">9:20</option><option value="210 / 297">A4</option><option value="3 / 1">3:1 배너</option><option value="custom">사용자 지정</option></select></label>
         <div className="canvas-size-grid"><label>너비 · px<input type="number" min={MIN_CANVAS_SIZE} max={MAX_CANVAS_WIDTH} value={canvasWidthInput} onChange={(event) => handleCanvasDimensionInput("width", event.target.value)} onBlur={() => commitCanvasDimensionInput("width")} /></label><button className={design.ratioLocked ? "is-locked" : ""} aria-label={design.ratioLocked ? "비율 잠금 해제" : "비율 잠금"} onClick={() => setDesign((current) => ({ ...current, ratioLocked: !current.ratioLocked }))}>{design.ratioLocked ? "연결" : "해제"}</button><label>높이 · px<input type="number" min={MIN_CANVAS_SIZE} max={MAX_CANVAS_HEIGHT} value={canvasHeightInput} onChange={(event) => handleCanvasDimensionInput("height", event.target.value)} onBlur={() => commitCanvasDimensionInput("height")} /></label></div>
         <div className="fixed-size-notice"><b>{selectedOutputSize.label}</b><span>{selectedOutputSize.width} × {selectedOutputSize.height}px · 저장 {selectedOutputSize.width * design.exportScale} × {selectedOutputSize.height * design.exportScale}px</span></div>
@@ -3654,7 +3766,7 @@ export default function QuoteStudio() {
           </div>}
         </>}
       </div>
-      <div className="control-card"><span className="field-label">페이지 분할</span><button className="secondary-button full-button" onClick={insertManualBreak}>커서 위치에 수동 경계 넣기</button><label className="check-control wide-check"><input type="checkbox" checked={layout.autoPaginate} onChange={(event) => setLayout((current) => ({ ...current, autoPaginate: event.target.checked }))} />남은 넘침 자동 분할</label>{layout.autoPaginate && <><label>자동 분할 기준<select value={layout.paginationBasis} onChange={(event) => setLayout((current) => ({ ...current, paginationBasis: event.target.value as PaginationBasis }))}><option value="canvas">현재 캔버스·여백·글자 크기</option><option value="characters">직접 지정한 글자 수</option></select></label>{layout.paginationBasis === "canvas" ? <div className="fixed-size-notice"><b>현재 규격 예상량</b><span>페이지당 약 {estimatedPageCapacity.toLocaleString()}자 · 문단 우선</span></div> : <label className="range-label"><span>페이지당 목표 글자<b>{layout.pageCapacity.toLocaleString()}자</b></span><input type="range" min="120" max="6000" step="20" value={layout.pageCapacity} onChange={(event) => setLayout((current) => ({ ...current, pageCapacity: Number(event.target.value) }))} /></label>}</>}<p className="helper-note">자동 분할은 캔버스에 맞춰 문단을 다음 페이지로 넘깁니다. 직접 넣은 수동 경계가 우선 적용됩니다.</p></div>
+      <div className="control-card"><span className="field-label">페이지 분할</span><button className="secondary-button full-button" onClick={insertManualBreak}>커서 위치에 수동 경계 넣기</button><label className="check-control wide-check"><input type="checkbox" disabled={messengerContentFit} checked={!messengerContentFit && layout.autoPaginate} onChange={(event) => setLayout((current) => ({ ...current, autoPaginate: event.target.checked }))} />남은 넘침 자동 분할</label>{!messengerContentFit && layout.autoPaginate && <><label>자동 분할 기준<select value={layout.paginationBasis} onChange={(event) => setLayout((current) => ({ ...current, paginationBasis: event.target.value as PaginationBasis }))}><option value="canvas">현재 캔버스·여백·글자 크기</option><option value="characters">직접 지정한 글자 수</option></select></label>{layout.paginationBasis === "canvas" ? <div className="fixed-size-notice"><b>현재 규격 예상량</b><span>페이지당 약 {estimatedPageCapacity.toLocaleString()}자 · 문단 우선</span></div> : <label className="range-label"><span>페이지당 목표 글자<b>{layout.pageCapacity.toLocaleString()}자</b></span><input type="range" min="120" max="6000" step="20" value={layout.pageCapacity} onChange={(event) => setLayout((current) => ({ ...current, pageCapacity: Number(event.target.value) }))} /></label>}</>}<p className="helper-note">{messengerContentFit ? "내용에 맞춤에서는 높이가 늘어나므로 자동 분할을 사용하지 않습니다. 수동 경계로 원하는 위치에서 나눌 수 있습니다." : "자동 분할은 캔버스에 맞춰 문단을 다음 페이지로 넘깁니다. 직접 넣은 수동 경계가 우선 적용됩니다."}</p></div>
       <div className="control-card direct-style-card"><div className="history-heading"><span className="field-label">글자 서식</span><small>{directMarks.filter((mark) => mark.kind !== "highlight").length}개 적용</small></div><p className="helper-note">본문 기본색은 전체 글자에 적용됩니다. 선택 글자색과 나머지 서식은 수정본에서 선택한 범위만 바꿉니다.</p>
         <div className="text-color-pair"><label className="color-control">본문 기본색<input type="color" value={design.textColor} onChange={(event) => setDesign((current) => ({ ...current, textColor: event.target.value }))} /></label><label className="color-control">선택 글자색<input type="color" value={directStyleDraft.color} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, color: event.target.value }))} /></label></div>
         <span className="quick-style-label">선택 영역 서식 지정</span>
@@ -3805,7 +3917,7 @@ export default function QuoteStudio() {
         <label className="check-control wide-check"><input type="checkbox" checked={layout.webcoreShowScrollbars} onChange={(event) => setLayout((current) => ({ ...current, webcoreShowScrollbars: event.target.checked }))} />고전 스크롤바 표시</label>
       </div>}
       {["bubble", "messenger"].includes(layout.mode) && <>
-        {layout.mode === "messenger" && <div className="control-card messenger-screen-settings"><span className="field-label">메신저 화면</span><div className="two-way-control"><button className={layout.messengerStyle === "kakao" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "kakao" }))}>카카오톡</button><button className={layout.messengerStyle === "dm" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "dm" }))}>DM</button></div><span className="mini-label">휴대폰 캡처 높이</span><div className="two-way-control"><button className={design.surfaceSize === "standard" ? "is-selected" : ""} onClick={() => setDesign((current) => ({ ...current, surfaceSize: "standard" }))}>540×960</button><button className={design.surfaceSize === "banner" ? "is-selected" : ""} onClick={() => setDesign((current) => ({ ...current, surfaceSize: "banner" }))}>540×1170</button></div>{layout.messengerStyle === "dm" && <label>DM 화면<select value={layout.dmTheme} onChange={(event) => setLayout((current) => ({ ...current, dmTheme: event.target.value as "light" | "dark" }))}><option value="light">라이트</option><option value="dark">다크</option></select></label>}<label>대화방 이름<input value={layout.chatTitle} onChange={(event) => setLayout((current) => ({ ...current, chatTitle: event.target.value }))} placeholder="대화" /></label><label>상태·참여자 정보<input value={layout.chatSubtitle} onChange={(event) => setLayout((current) => ({ ...current, chatSubtitle: event.target.value }))} placeholder="선택 입력" /></label><label>날짜 구분선<input value={layout.chatDate} onChange={(event) => setLayout((current) => ({ ...current, chatDate: event.target.value }))} placeholder="2026년 7월 21일 화요일" /></label><div className="split-fields"><label>상태바 시간<input type="time" value={layout.statusBarTime} onChange={(event) => setLayout((current) => ({ ...current, statusBarTime: event.target.value }))} /></label><label>입력창 문구<input value={layout.chatComposerText} onChange={(event) => setLayout((current) => ({ ...current, chatComposerText: event.target.value }))} /></label></div></div>}
+        {layout.mode === "messenger" && <div className="control-card messenger-screen-settings"><span className="field-label">메신저 화면</span><div className="three-way-control"><button className={layout.messengerStyle === "kakao" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "kakao" }))}>카카오톡</button><button className={layout.messengerStyle === "dm" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "dm" }))}>DM</button><button className={layout.messengerStyle === "imessage" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "imessage" }))}>아이메시지</button></div><div className="messenger-options"><label><input type="checkbox" checked={layout.messengerShowHeader} onChange={(event) => setLayout((current) => ({ ...current, messengerShowHeader: event.target.checked }))} />상단 바</label><label><input type="checkbox" checked={layout.messengerShowComposer} onChange={(event) => setLayout((current) => ({ ...current, messengerShowComposer: event.target.checked }))} />입력창</label><label><input type="checkbox" checked={layout.messengerShowNavigation} onChange={(event) => setLayout((current) => ({ ...current, messengerShowNavigation: event.target.checked }))} />홈 버튼 영역</label></div>{layout.messengerStyle === "dm" && <label>DM 화면<select value={layout.dmTheme} onChange={(event) => setLayout((current) => ({ ...current, dmTheme: event.target.value as "light" | "dark" }))}><option value="light">라이트</option><option value="dark">다크</option></select></label>}<label>대화방 이름<input value={layout.chatTitle} onChange={(event) => setLayout((current) => ({ ...current, chatTitle: event.target.value }))} placeholder="대화" /></label><label>상태·참여자 정보<input value={layout.chatSubtitle} onChange={(event) => setLayout((current) => ({ ...current, chatSubtitle: event.target.value }))} placeholder="선택 입력" /></label><label>날짜 구분선<input value={layout.chatDate} onChange={(event) => setLayout((current) => ({ ...current, chatDate: event.target.value }))} placeholder="2026년 7월 21일 화요일" /></label><div className="split-fields"><label>상태바 시간<input type="time" value={layout.statusBarTime} onChange={(event) => setLayout((current) => ({ ...current, statusBarTime: event.target.value }))} /></label><label>입력창 문구<input value={layout.chatComposerText} onChange={(event) => setLayout((current) => ({ ...current, chatComposerText: event.target.value }))} /></label></div></div>}
         <div className="control-card">
           <div className="history-heading"><span className="field-label">화자와 방향</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 화자 추가</button></div>
           {layout.speakers.map((speaker) => <div className="speaker-editor" key={speaker.id}>

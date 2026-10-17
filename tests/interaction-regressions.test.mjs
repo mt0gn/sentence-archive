@@ -122,11 +122,11 @@ test("attribution is rendered above every layout rather than limited by layout m
   assert.match(component, /<small>모든 템플릿<\/small>/);
 });
 
-test("messenger chrome is vertically balanced and uses a send icon", () => {
-  assert.match(component, /className="messenger-send"><svg viewBox="0 0 24 24">/);
-  assert.doesNotMatch(component, /isDm \? "♡" : "#"/);
-  assert.match(styles, /\.messenger-shell[^}]*grid-template-rows:\s*2\.05em 3\.8em minmax\(0, 1fr\) 5\.85em/);
-  assert.match(styles, /\.messenger-composer b svg[^}]*fill:\s*currentColor/);
+test("messenger chrome remains independent of body font sizing", () => {
+  assert.match(component, /type MessengerStyle = "kakao" \| "dm" \| "imessage"/);
+  assert.match(component, /getMessengerChrome\(layout, width\)/);
+  assert.match(styles, /\.layout-imessage \.preview-overlay/);
+  assert.match(component, /value\?\.messengerStyle === "imessage" \? "imessage"/);
 });
 
 test("dialogue rules use vertical line styles and per-character assignment", () => {
