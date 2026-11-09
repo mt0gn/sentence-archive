@@ -52,11 +52,25 @@ test('chrome scales with width and hidden bars reserve no space', () => {
     const layout = { ...defaultLayout, messengerStyle };
     const normal = getMessengerChrome(layout, 540), wide = getMessengerChrome(layout, 1080);
     for (const key of ['status', 'header', 'bottom']) assert.equal(wide[key], normal[key] * 2);
-    const hidden = getMessengerChrome({ ...layout, messengerShowHeader: false, messengerShowComposer: false, messengerShowNavigation: false }, 540);
+    const hidden = getMessengerChrome({ ...layout, messengerShowStatusBar: false, messengerShowHeader: false, messengerShowComposer: false, messengerShowNavigation: false }, 540);
     assert.equal(hidden.status + hidden.header + hidden.bottom, 0);
     const composerOnly = getMessengerChrome({ ...layout, messengerShowNavigation: false }, 540);
     const navigationOnly = getMessengerChrome({ ...layout, messengerShowComposer: false }, 540);
     assert.ok(composerOnly.bottom > 0 && composerOnly.bottom < normal.bottom);
     assert.ok(navigationOnly.bottom > 0 && navigationOnly.bottom < normal.bottom);
   }
+});
+
+test('status and conversation header can be hidden independently and survive saved projects', () => {
+  for (const messengerStyle of ['kakao', 'dm', 'imessage']) {
+    for (const status of [false, true]) for (const header of [false, true]) {
+      const layout = normalizeLayout({ ...defaultLayout, messengerStyle, messengerShowStatusBar: status, messengerShowHeader: header });
+      const restored = normalizeLayout(JSON.parse(JSON.stringify(layout)));
+      const chrome = getMessengerChrome(restored, 540);
+      assert.equal(chrome.status, status ? 44 : 0);
+      assert.equal(chrome.header, header ? (messengerStyle === 'imessage' ? 60 : 82) : 0);
+    }
+  }
+  assert.equal(normalizeLayout({ messengerShowHeader: false }).messengerShowStatusBar, false);
+  assert.equal(normalizeLayout({ messengerShowHeader: true }).messengerShowStatusBar, true);
 });

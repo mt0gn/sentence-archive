@@ -299,6 +299,7 @@ type LayoutSettings = {
   messengerSizing: "content" | "phone" | "custom";
   messengerWidth: number;
   messengerHeight: number;
+  messengerShowStatusBar: boolean;
   messengerShowHeader: boolean;
   messengerShowComposer: boolean;
   messengerShowNavigation: boolean;
@@ -630,6 +631,7 @@ const defaultLayout: LayoutSettings = {
   messengerSizing: "content",
   messengerWidth: 540,
   messengerHeight: 960,
+  messengerShowStatusBar: true,
   messengerShowHeader: true,
   messengerShowComposer: true,
   messengerShowNavigation: true,
@@ -745,6 +747,7 @@ function normalizeLayout(value?: Partial<LayoutSettings>, legacyDesign?: Partial
       : value && ["messenger", "kakao", "dm"].includes(String(value.mode)) ? "phone" : "content",
     messengerWidth: normalizeMessengerDimension(value?.messengerWidth, 540, MAX_CANVAS_WIDTH),
     messengerHeight: normalizeMessengerDimension(value?.messengerHeight, 960, MAX_CANVAS_HEIGHT),
+    messengerShowStatusBar: value?.messengerShowStatusBar ?? (value?.messengerShowHeader !== false),
     messengerShowHeader: value?.messengerShowHeader !== false,
     messengerShowComposer: value?.messengerShowComposer !== false,
     messengerShowNavigation: value?.messengerShowNavigation !== false,
@@ -1544,7 +1547,7 @@ function getMessengerChrome(layout: LayoutSettings, width: number) {
   const composer = layout.messengerShowComposer !== false;
   const navigation = layout.messengerShowNavigation !== false;
   const bottom = composer ? navigation ? (imessage ? 100 : 150) : (imessage ? 84 : 90) : navigation ? (imessage ? 26 : 70) : 0;
-  return { status: showHeader ? 44 * scale : 0, header: showHeader ? (imessage ? 92 : 82) * scale : 0, bottom: bottom * scale };
+  return { status: layout.messengerShowStatusBar !== false ? 44 * scale : 0, header: showHeader ? (imessage ? 60 : 82) * scale : 0, bottom: bottom * scale };
 }
 
 function getOutputSize(design: DesignSettings, layout: LayoutSettings): OutputSize {
@@ -1789,7 +1792,8 @@ function MessagePreview({ page, rules, mosaicTerms, layout, directMarks = [], fl
   const paragraphs = splitParagraphsWithOffsets(page.text);
   const pageBlocks = flowBlocks.filter((block) => block.anchor >= page.startOffset && block.anchor <= page.startOffset + page.text.length).sort((a, b) => a.anchor - b.anchor);
   const renderedBlocks = new Set<string>();
-  const threadStyle = { "--message-gap": `${layout.messageGap}px`, "--bubble-max": `${layout.bubbleMaxWidth}%`, "--bubble-radius": `${layout.bubbleRadius}px`, "--bubble-pad-x": `${layout.bubblePaddingX}px`, "--bubble-pad-y": `${layout.bubblePaddingY}px` } as CSSProperties;
+  const bubbleUnit = (value: number) => layout.mode === "messenger" ? `calc(${value}px * var(--messenger-scale, 1))` : `${value}px`;
+  const threadStyle = { "--message-gap": bubbleUnit(layout.messageGap), "--bubble-max": `${layout.bubbleMaxWidth}%`, "--bubble-radius": bubbleUnit(layout.bubbleRadius), "--bubble-pad-x": bubbleUnit(layout.bubblePaddingX), "--bubble-pad-y": bubbleUnit(layout.bubblePaddingY) } as CSSProperties;
   const renderPhotoMessage = (block: FlowBlock) => {
     const speaker = layout.speakers.find((item) => item.id === block.messageSpeakerId) || layout.speakers[0];
     if (!speaker || !block.src) return renderFlowBlock(block);
@@ -1878,13 +1882,13 @@ function MessengerPreview({ page, rules, mosaicTerms, layout, directMarks, flowB
   const placeholder = isIMessage && (!layout.chatComposerText || layout.chatComposerText === "메시지 보내기") ? "iMessage" : layout.chatComposerText || "메시지 보내기";
   const chrome = getMessengerChrome(layout, width);
   const contentFit = layout.messengerSizing === "content";
-  return <div className={`messenger-shell ${isDm ? `is-dm theme-${layout.dmTheme}` : isIMessage ? "is-imessage" : "is-kakao"}${layout.messengerShowHeader === false ? " no-messenger-header" : ""}${layout.messengerShowComposer === false ? " no-messenger-composer" : ""}${layout.messengerShowNavigation === false ? " no-messenger-navigation" : ""}`} style={{ gridTemplateRows: `${chrome.status}px ${chrome.header}px ${contentFit ? "auto" : "minmax(0, 1fr)"} ${chrome.bottom}px` }}>
+  return <div className={`messenger-shell ${isDm ? `is-dm theme-${layout.dmTheme}` : isIMessage ? "is-imessage" : "is-kakao"}${layout.messengerShowStatusBar === false ? " no-messenger-status-bar" : ""}${layout.messengerShowHeader === false ? " no-messenger-header" : ""}${layout.messengerShowComposer === false ? " no-messenger-composer" : ""}${layout.messengerShowNavigation === false ? " no-messenger-navigation" : ""}`} style={{ gridTemplateRows: `${chrome.status}px ${chrome.header}px ${contentFit ? "auto" : "minmax(0, 1fr)"} ${chrome.bottom}px` }}>
     <div className="messenger-status-bar"><b>{(layout.statusBarTime || "09:41").replace(/^0/, "")}</b><svg className="messenger-status-icons" viewBox="0 0 78 20" fill="currentColor" aria-hidden="true"><path d="M1 15h4v4H1zm6-4h4v8H7zm6-4h4v12h-4zm6-4h4v16h-4z" /><path d="M30 7q10-10 20 0l-2 2q-8-8-16 0Zm4 4q6-6 12 0l-2 2q-4-4-8 0Zm4 4q2-2 4 0l-2 3Z" /><rect x="56" y="4" width="18" height="12" rx="3" fill="none" stroke="currentColor" strokeWidth="1.5" /><rect x="58" y="6" width="14" height="8" rx="1" /><path d="M76 8h2v4h-2z" /></svg></div>
     <div className="messenger-app-bar">
       <span className="messenger-back"><MessengerIcon name="back" /></span>
       {isDm && avatar}
-      <div className="messenger-title">{isIMessage && layout.showAvatars && avatar}<b>{title}</b>{layout.chatSubtitle && <small>{layout.chatSubtitle}</small>}</div>
-      <div className="messenger-actions">{!isDm && !isIMessage && <MessengerIcon name="search" />}{!isIMessage && <MessengerIcon name="phone" />}<MessengerIcon name={isDm || isIMessage ? "video" : "menu"} /></div>
+      <div className="messenger-title"><b>{title}</b>{layout.chatSubtitle && <small>{layout.chatSubtitle}</small>}</div>
+      <div className="messenger-actions">{!isDm && !isIMessage && <MessengerIcon name="search" />}{!isIMessage && <MessengerIcon name="phone" />}{!isIMessage && <MessengerIcon name={isDm ? "video" : "menu"} />}</div>
     </div>
     <div className="messenger-chat-area">
       {layout.chatDate && <div className="message-date-divider">{layout.chatDate}</div>}
@@ -1894,7 +1898,7 @@ function MessengerPreview({ page, rules, mosaicTerms, layout, directMarks, flowB
       <div className="messenger-composer">
         <span className="composer-leading"><MessengerIcon name={isDm ? "camera" : "plus"} /></span>
         <span className="composer-placeholder">{placeholder}</span>
-        <span className="composer-tools">{isDm ? <><MessengerIcon name="mic" /><MessengerIcon name="image" /><MessengerIcon name="sticker" /><MessengerIcon name="plus" /></> : isIMessage ? <><MessengerIcon name="mic" /><span className="imessage-send"><MessengerIcon name="up" /></span></> : <><MessengerIcon name="smile" /><MessengerIcon name="hash" /></>}</span>
+        <span className="composer-tools">{isDm ? <><MessengerIcon name="mic" /><MessengerIcon name="image" /><MessengerIcon name="sticker" /><MessengerIcon name="plus" /></> : isIMessage ? <><span className="imessage-send"><MessengerIcon name="up" /></span></> : <><MessengerIcon name="smile" /><MessengerIcon name="hash" /></>}</span>
       </div>
       <div className="messenger-system-nav">{isIMessage ? <i className="home-indicator" /> : <>{["recents", "home", "back"].map((name) => <span className="system-nav-slot" key={name}><svg className={`system-nav-icon system-${name}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{name === "recents" ? <path d="M5 4v16M12 4v16M19 4v16" /> : name === "home" ? <rect x="4" y="4" width="16" height="16" rx="5.5" /> : <path d="m15 4-8 8 8 8" />}</svg></span>)}</>}</div>
     </div>
@@ -2020,7 +2024,7 @@ function PreviewPage({ page, pageNumber, totalPages, title, rules, mosaicTerms, 
     "--messenger-scale": outputSize.width / 540,
     "--preview-font": font.family,
     "--preview-text": design.textColor,
-    "--text-size": `${design.fontSize}px`,
+    "--text-size": `${design.fontSize * (layout.mode === "messenger" ? outputSize.width / 540 * (layout.messengerStyle === "imessage" ? 1 : 1.375) : 1)}px`,
     "--text-weight": design.fontWeight,
     "--text-line": `${design.fontSize * design.lineHeight}px`,
     "--letter-spacing": `${design.letterSpacing}em`,
@@ -3917,7 +3921,7 @@ export default function QuoteStudio() {
         <label className="check-control wide-check"><input type="checkbox" checked={layout.webcoreShowScrollbars} onChange={(event) => setLayout((current) => ({ ...current, webcoreShowScrollbars: event.target.checked }))} />고전 스크롤바 표시</label>
       </div>}
       {["bubble", "messenger"].includes(layout.mode) && <>
-        {layout.mode === "messenger" && <div className="control-card messenger-screen-settings"><span className="field-label">메신저 화면</span><div className="three-way-control"><button className={layout.messengerStyle === "kakao" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "kakao" }))}>카카오톡</button><button className={layout.messengerStyle === "dm" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "dm" }))}>DM</button><button className={layout.messengerStyle === "imessage" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "imessage" }))}>아이메시지</button></div><div className="messenger-options"><label><input type="checkbox" checked={layout.messengerShowHeader} onChange={(event) => setLayout((current) => ({ ...current, messengerShowHeader: event.target.checked }))} />상단 바</label><label><input type="checkbox" checked={layout.messengerShowComposer} onChange={(event) => setLayout((current) => ({ ...current, messengerShowComposer: event.target.checked }))} />입력창</label><label><input type="checkbox" checked={layout.messengerShowNavigation} onChange={(event) => setLayout((current) => ({ ...current, messengerShowNavigation: event.target.checked }))} />홈 버튼 영역</label></div>{layout.messengerStyle === "dm" && <label>DM 화면<select value={layout.dmTheme} onChange={(event) => setLayout((current) => ({ ...current, dmTheme: event.target.value as "light" | "dark" }))}><option value="light">라이트</option><option value="dark">다크</option></select></label>}<label>대화방 이름<input value={layout.chatTitle} onChange={(event) => setLayout((current) => ({ ...current, chatTitle: event.target.value }))} placeholder="대화" /></label><label>상태·참여자 정보<input value={layout.chatSubtitle} onChange={(event) => setLayout((current) => ({ ...current, chatSubtitle: event.target.value }))} placeholder="선택 입력" /></label><label>날짜 구분선<input value={layout.chatDate} onChange={(event) => setLayout((current) => ({ ...current, chatDate: event.target.value }))} placeholder="2026년 7월 21일 화요일" /></label><div className="split-fields"><label>상태바 시간<input type="time" value={layout.statusBarTime} onChange={(event) => setLayout((current) => ({ ...current, statusBarTime: event.target.value }))} /></label><label>입력창 문구<input value={layout.chatComposerText} onChange={(event) => setLayout((current) => ({ ...current, chatComposerText: event.target.value }))} /></label></div></div>}
+        {layout.mode === "messenger" && <div className="control-card messenger-screen-settings"><span className="field-label">메신저 화면</span><div className="three-way-control"><button className={layout.messengerStyle === "kakao" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "kakao" }))}>카카오톡</button><button className={layout.messengerStyle === "dm" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "dm" }))}>DM</button><button className={layout.messengerStyle === "imessage" ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, messengerStyle: "imessage" }))}>아이메시지</button></div><div className="messenger-options"><label><input type="checkbox" checked={layout.messengerShowStatusBar} onChange={(event) => setLayout((current) => ({ ...current, messengerShowStatusBar: event.target.checked }))} />상태 표시줄 (시간·와이파이·배터리)</label><label><input type="checkbox" checked={layout.messengerShowHeader} onChange={(event) => setLayout((current) => ({ ...current, messengerShowHeader: event.target.checked }))} />대화방 제목 바</label><label><input type="checkbox" checked={layout.messengerShowComposer} onChange={(event) => setLayout((current) => ({ ...current, messengerShowComposer: event.target.checked }))} />입력창</label><label><input type="checkbox" checked={layout.messengerShowNavigation} onChange={(event) => setLayout((current) => ({ ...current, messengerShowNavigation: event.target.checked }))} />홈 버튼 영역</label></div>{layout.messengerStyle === "dm" && <label>DM 화면<select value={layout.dmTheme} onChange={(event) => setLayout((current) => ({ ...current, dmTheme: event.target.value as "light" | "dark" }))}><option value="light">라이트</option><option value="dark">다크</option></select></label>}<label>대화방 이름<input value={layout.chatTitle} onChange={(event) => setLayout((current) => ({ ...current, chatTitle: event.target.value }))} placeholder="대화" /></label><label>상태·참여자 정보<input value={layout.chatSubtitle} onChange={(event) => setLayout((current) => ({ ...current, chatSubtitle: event.target.value }))} placeholder="선택 입력" /></label><label>날짜 구분선<input value={layout.chatDate} onChange={(event) => setLayout((current) => ({ ...current, chatDate: event.target.value }))} placeholder="2026년 7월 21일 화요일" /></label><div className="split-fields"><label>상태바 시간<input type="time" value={layout.statusBarTime} onChange={(event) => setLayout((current) => ({ ...current, statusBarTime: event.target.value }))} /></label><label>입력창 문구<input value={layout.chatComposerText} onChange={(event) => setLayout((current) => ({ ...current, chatComposerText: event.target.value }))} /></label></div></div>}
         <div className="control-card">
           <div className="history-heading"><span className="field-label">화자와 방향</span><button className="speaker-add-button" onClick={addSpeaker}>＋ 화자 추가</button></div>
           {layout.speakers.map((speaker) => <div className="speaker-editor" key={speaker.id}>
