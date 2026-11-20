@@ -6,6 +6,7 @@ export type ParagraphMark = {
   id: string;
   start: number;
   end: number;
+  align?: "left" | "center" | "right" | "justify";
   role?: ParagraphRole;
   presentation?: ParagraphPresentation;
   color?: string;
@@ -62,6 +63,7 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
     const start = Math.max(0, Number(mark?.start));
     const end = Math.max(start, Number(mark?.end));
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    const align = ["left", "center", "right", "justify"].includes(mark.align || "") ? mark.align : undefined;
     const role = paragraphRoles.has(mark.role as ParagraphRole) ? mark.role : undefined;
     const requestedPresentation = String(mark.presentation || "");
     const presentation = requestedPresentation === "quote"
@@ -76,11 +78,12 @@ export function normalizeParagraphMarks(values?: ParagraphMark[]): ParagraphMark
     const italic = mark.italic === true ? true : undefined;
     const lineStyle = paragraphLineStyles.has(mark.lineStyle as ParagraphLineStyle) ? verticalizeParagraphLineStyle(mark.lineStyle) : undefined;
     const linePosition = mark.linePosition === "above" || mark.linePosition === "below" ? mark.linePosition : undefined;
-    if (!role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
+    if (!align && !role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
     return [{
       id: mark.id || `paragraph-mark-${index}-${start}`,
       start,
       end,
+      align,
       role,
       presentation,
       color,

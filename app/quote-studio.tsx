@@ -1293,6 +1293,7 @@ function PreviewText({ text, rules, mosaicTerms, paragraphIndent = false, direct
     ].filter(Boolean).join(" ");
     const presentationColor = paragraphMark?.presentationColor || presentationRule?.lineColor || dialogueSpeaker?.accentColor || "#6694ea";
     const paragraphStyle = paragraphMark || presentationRule || presentation ? {
+      textAlign: paragraphMark?.align,
       color: paragraphMark?.color,
       backgroundColor: presentation === "bubble" ? presentationColor : undefined,
       "--dialogue-line-color": presentationColor,
@@ -1385,7 +1386,7 @@ function NotebookPreview({ page, pageNumber, rules, mosaicTerms, layout, directM
   return <div className={`notebook-sheet pattern-${layout.notebookPattern}`}>
     {layout.notebookDate && <div className="notebook-meta"><time>{layout.notebookDate}</time></div>}
     <div className="notebook-copy"><PreviewText text={page.text} rules={rules} mosaicTerms={mosaicTerms} directMarks={directMarks} flowBlocks={flowBlocks} paragraphMarks={paragraphMarks} baseOffset={page.startOffset} layout={layout} /></div>
-    <div className="notebook-page-number"><span>{layout.notebookMeta}</span><b>{String(pageNumber).padStart(2, "0")}</b></div>
+    {layout.notebookMeta.trim() && <div className="notebook-page-number"><span>{layout.notebookMeta}</span><b>{String(pageNumber).padStart(2, "0")}</b></div>}
   </div>;
 }
 
@@ -2921,6 +2922,16 @@ export default function QuoteStudio() {
     setSelectedParagraphStarts((current) => current.includes(start) ? current.filter((value) => value !== start) : [...current, start]);
   }
 
+  function alignSelectedParagraphs(align: TextAlign | undefined) {
+    const { start, end } = editorSelection;
+    if (end <= start) return setToast("수정본에서 정렬할 문장을 먼저 선택하세요.");
+    const selected = splitParagraphsWithOffsets(draft).filter(p => p.start < end && p.start + p.text.length > start);
+    setParagraphMarks(current => normalizeParagraphMarks([
+      ...current.filter(m => !selected.some(p => p.start === m.start)),
+      ...selected.map(p => ({ ...current.find(m => m.start === p.start), id: current.find(m => m.start === p.start)?.id || makeId("paragraph-mark"), start: p.start, end: p.start + p.text.length, align }))
+    ]));
+    setToast(`선택한 ${selected.length}개 문단의 정렬을 변경했습니다.`);
+  }
   function applyParagraphMarkPatch(patch: ParagraphMarkPatch) {
     if (!selectedParagraphStarts.length) return setToast("먼저 문단을 선택하세요.");
     const selected = new Set(selectedParagraphStarts);
@@ -2937,11 +2948,12 @@ export default function QuoteStudio() {
         const bubbleSide = "bubbleSide" in patch ? patch.bubbleSide || undefined : previous?.bubbleSide;
         const lineStyle = "lineStyle" in patch ? patch.lineStyle || undefined : previous?.lineStyle;
         const linePosition = "linePosition" in patch ? patch.linePosition || undefined : previous?.linePosition;
-        if (!role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
+        if (!previous?.align && !role && !presentation && !color && !bold && !italic && !presentationColor && !bubbleSide && !lineStyle && !linePosition) return [];
         return [{
           id: previous?.id || makeId("paragraph-mark"),
           start: paragraph.start,
           end: paragraph.end,
+          align: previous?.align,
           role,
           presentation,
           color,
@@ -3716,7 +3728,7 @@ export default function QuoteStudio() {
       </div>}
     </div>;
 
-    if (activeTool === "edit") return <div className="tool-content">
+    if (activeTool === "edit") return <div className="tool-content"><div className="control-card"><span className="field-label">선택 영역 정렬</span><p className="helper-note">선택한 글자가 포함된 문단에 적용합니다. 다른 문단은 유지됩니다.</p><div className="four-way-control">{(["left", "center", "right", "justify"] as TextAlign[]).map(align => <button key={align} onMouseDown={event => event.preventDefault()} onClick={() => alignSelectedParagraphs(align)}>{align === "left" ? "왼쪽" : align === "center" ? "가운데" : align === "right" ? "오른쪽" : "양쪽"}</button>)}</div><button onClick={() => alignSelectedParagraphs(undefined)}>전체 정렬 따르기</button></div>
       <div className="section-heading"><span className="eyebrow">STEP 03 · CONTENT</span><h2>본문·문단 장식</h2><p>본문을 다듬고 선택 서식, 문단 구분 장식과 페이지 경계를 정합니다.</p></div>
       <div className="control-card highlight-card"><div className="history-heading"><span className="field-label">형광펜</span><small>{directMarks.filter((mark) => mark.kind === "highlight" || mark.style.highlightColor !== "transparent").length}개 적용</small></div><p className="helper-note">형광펜은 구문 규칙과 다른 선택 서식보다 항상 위에 표시됩니다.</p>
         <div className="highlight-card-controls"><label className="color-control">형광펜 색<input type="color" value={directStyleDraft.highlightColor === "transparent" ? "#fff0a8" : directStyleDraft.highlightColor} onChange={(event) => setDirectStyleDraft((current) => ({ ...current, highlightColor: event.target.value }))} /></label><button className="primary-button" onClick={() => applyHighlight(directStyleDraft.highlightColor === "transparent" ? "#fff0a8" : directStyleDraft.highlightColor)}>선택 영역에 적용</button><button className="secondary-button" onClick={clearHighlight}>선택 영역에서 제거</button></div>
@@ -3900,7 +3912,7 @@ export default function QuoteStudio() {
         {layout.manuscriptShowHeader && <><label>원고 제목<input value={layout.manuscriptTitle} onChange={(event) => setLayout((current) => ({ ...current, manuscriptTitle: event.target.value }))} placeholder={projectTitle} /></label><div className="split-fields"><label>제목 항목명<input value={layout.manuscriptTitleLabel} onChange={(event) => setLayout((current) => ({ ...current, manuscriptTitleLabel: event.target.value }))} /></label>{layout.manuscriptShowPageNumber && <label>매수 항목명<input value={layout.manuscriptSheetLabel} onChange={(event) => setLayout((current) => ({ ...current, manuscriptSheetLabel: event.target.value }))} /></label>}</div></>}
         {layout.manuscriptShowFooter && <><label>왼쪽 하단 문구<input value={layout.manuscriptFooterLeft} onChange={(event) => setLayout((current) => ({ ...current, manuscriptFooterLeft: event.target.value }))} /></label><label>오른쪽 하단 문구<input value={layout.manuscriptFooterRight} onChange={(event) => setLayout((current) => ({ ...current, manuscriptFooterRight: event.target.value }))} /></label></>}
       </div>}
-      {layout.mode === "notebook" && <div className="control-card layout-copy-card"><span className="field-label">노트 구성과 문구</span><label>내지 종류<select value={layout.notebookPattern} onChange={(event) => setLayout((current) => ({ ...current, notebookPattern: event.target.value as NotebookPattern }))}><option value="line">유선 노트</option><option value="grid">방안 노트</option><option value="dot">도트 노트</option></select></label><p className="helper-note">가장 위의 좁은 줄은 비워 두고, 본문은 두 번째 줄부터 시작합니다.</p><label>날짜<input value={layout.notebookDate} onChange={(event) => setLayout((current) => ({ ...current, notebookDate: event.target.value }))} placeholder="2026. 07. 22" /></label><label>분류·쪽 정보<input value={layout.notebookMeta} onChange={(event) => setLayout((current) => ({ ...current, notebookMeta: event.target.value }))} placeholder="NOTE · 01" /></label></div>}
+      {layout.mode === "notebook" && <div className="control-card layout-copy-card"><span className="field-label">노트 구성과 문구</span><label>내지 종류<select value={layout.notebookPattern} onChange={(event) => setLayout((current) => ({ ...current, notebookPattern: event.target.value as NotebookPattern }))}><option value="line">유선 노트</option><option value="grid">방안 노트</option><option value="dot">도트 노트</option></select></label><p className="helper-note">가장 위의 좁은 줄은 비워 두고, 본문은 두 번째 줄부터 시작합니다.</p><label>날짜<input value={layout.notebookDate} onChange={(event) => setLayout((current) => ({ ...current, notebookDate: event.target.value }))} placeholder="2026. 07. 22" /></label><label>분류·쪽 정보<input value={layout.notebookMeta} onChange={(event) => setLayout((current) => ({ ...current, notebookMeta: event.target.value }))} placeholder="비우면 하단 정보와 쪽 번호 숨김" /></label></div>}
       {layout.mode === "microfilm" && <div className="control-card layout-copy-card"><span className="field-label">마이크로필름 구성</span><p className="helper-note">가로 결과물은 필름 프레임, 긴 배너는 필름 스트립을 선택하세요. 테두리와 필름 구멍도 선택한 규격에 맞춰 함께 조정됩니다.</p><div className="two-way-control"><button className={design.surfaceSize === "standard" ? "is-selected" : ""} onClick={() => applyMicrofilmPreset("standard")}>필름 프레임 · 960×540</button><button className={design.surfaceSize === "banner" ? "is-selected" : ""} onClick={() => applyMicrofilmPreset("banner")}>필름 스트립 · 1200×400</button></div><span className="mini-label">본문 세로 정렬</span><div className="three-way-control">{(["top", "center", "bottom"] as MicrofilmBodyAlign[]).map((align) => <button className={layout.microfilmBodyAlign === align ? "is-selected" : ""} onClick={() => setLayout((current) => ({ ...current, microfilmBodyAlign: align }))} key={align}>{align === "top" ? "위" : align === "center" ? "가운데" : "아래"}</button>)}</div><div className="fixed-size-notice"><b>{selectedOutputSize.label}</b><span>{selectedOutputSize.width} × {selectedOutputSize.height}px</span></div><label>컬렉션 이름<input value={layout.microfilmCollection} onChange={(event) => setLayout((current) => ({ ...current, microfilmCollection: event.target.value }))} /></label><div className="split-fields"><label>프레임 표기<input value={layout.microfilmFrame} onChange={(event) => setLayout((current) => ({ ...current, microfilmFrame: event.target.value }))} /></label><label>기록 날짜<input value={layout.microfilmDate} onChange={(event) => setLayout((current) => ({ ...current, microfilmDate: event.target.value }))} /></label></div><label>캡션<input value={layout.microfilmCaption} onChange={(event) => setLayout((current) => ({ ...current, microfilmCaption: event.target.value }))} /></label></div>}
       {layout.mode === "document" && <div className="control-card layout-copy-card">
         <span className="field-label">오피스 화면</span>
