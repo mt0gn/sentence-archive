@@ -20,6 +20,7 @@ import {
   rebaseParagraphMarks,
   splitParagraphsWithOffsets,
 } from "./paragraph-blocks";
+import { rebaseSpeakerAssignments } from "./speaker-rebase";
 import { APP_NAME, APP_STAMP, APP_TAGLINE } from "./brand";
 
 type ToolId = "import" | "rules" | "edit" | "privacy" | "design" | "layout" | "export";
@@ -1782,7 +1783,7 @@ function isDoubleQuotedParagraph(text: string) {
 }
 
 function resolveMessageSpeakerId(layout: LayoutSettings, text: string, globalKey: string, localKey: string) {
-  const explicit = layout.assignments[globalKey] || layout.assignments[localKey];
+  const explicit = Object.hasOwn(layout.assignments, globalKey) ? layout.assignments[globalKey] : layout.assignments[localKey];
   if (explicit === NARRATION_ASSIGNMENT) return "";
   if (explicit) return explicit;
   if (layout.mode === "bubble" && isDoubleQuotedParagraph(text)) return layout.speakers[0]?.id || "";
@@ -2898,14 +2899,16 @@ export default function QuoteStudio() {
       return [];
     }));
     setLayout((current) => {
-      if (!current.mosaicExclusions.length) return current;
+      const migrated = { ...current.assignments };
+      for (const page of displayPages) splitParagraphsWithOffsets(page.text).forEach((paragraph, index) => { const globalKey = `text:${page.startOffset + paragraph.start}`; const localKey = `${page.id}:${index}`; if (!Object.hasOwn(migrated, globalKey) && Object.hasOwn(migrated, localKey)) migrated[globalKey] = migrated[localKey]; });
+      const assignments = rebaseSpeakerAssignments(migrated, draft, next);
       const mosaicExclusions = current.mosaicExclusions.flatMap((item) => {
         if (item.end <= prefix) return [item];
         if (item.start >= oldEnd) return delta === 0 ? [item] : [{ ...item, start: item.start + delta, end: item.end + delta }];
         return [];
       });
       const unchanged = mosaicExclusions.length === current.mosaicExclusions.length && mosaicExclusions.every((item, index) => item === current.mosaicExclusions[index]);
-      return unchanged ? current : { ...current, mosaicExclusions };
+      return { ...current, assignments, mosaicExclusions: unchanged ? current.mosaicExclusions : mosaicExclusions };
     });
     setSearchExcludedStarts((current) => current.flatMap((start) => {
       if (start < prefix) return [start];
